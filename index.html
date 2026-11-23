@@ -894,7 +894,7 @@ VIEWS.usuarios=async v=>{
  </tbody></table></div>
  <div class="card" style="margin-top:16px"><h3>Dados do sistema</h3>
   <p class="muted small">Os dados ficam na nuvem (Supabase) e são os mesmos para todo mundo. Se este navegador ainda tiver dados antigos guardados só aqui, você pode enviá-los para a nuvem.</p>
-  <div class="row"><button class="btn pri" id="mimp">${ic('up')} Carregar backup (.zip)</button><button class="btn" id="mig">Enviar dados deste navegador</button></div>
+  <div class="row"><button class="btn pri" id="mimp">${ic('up')} Carregar backup (.zip)</button><button class="btn pri" id="mtxt">${ic('up')} Colar dados</button><button class="btn" id="mig">Enviar dados deste navegador</button></div>
   <input type="file" id="mfile" accept=".zip" hidden></div>`;
  $('#nu').onclick=()=>allowForm();
  $$('[data-ed]',v).forEach(b=>b.onclick=()=>allowForm((al.data||[]).find(u=>u.email===b.dataset.ed)));
@@ -907,6 +907,7 @@ VIEWS.usuarios=async v=>{
    closeModal();toast('Acesso removido.');route()}});
  $('#mig').onclick=migrateLocal;
  $('#mimp').onclick=()=>$('#mfile').click();
+ $('#mtxt').onclick=importText;
  $('#mfile').onchange=e=>{const f=e.target.files[0];e.target.value='';if(f)importBackup(f)};
 };
 function allowForm(u){
@@ -998,6 +999,52 @@ async function importBackup(file){
    }catch(e){st('<span style="color:var(--bad)">Falhou: '+esc(e.message||String(e))+'</span>');$('#bko').disabled=false}
   };
  }catch(e){st('<span style="color:var(--bad)">'+esc(e.message||String(e))+'</span>')}
+}
+
+/* manda para a nuvem um conjunto de dados + arquivos já lidos */
+async function pushToCloud(data,files,types,st){
+ let i=0;
+ for(const [name,getBlob] of files){
+  const blob=await getBlob();
+  const r=await sb.storage.from('files').upload(name,blob,{contentType:types[name]||blob.type||'application/octet-stream',upsert:true});
+  if(r.error)throw new Error('arquivo '+name+': '+(r.error.message||''));
+  i++;if(i%3===0||i===files.length)st(`Enviando arquivos… ${i}/${files.length}`);
+ }
+ st('Enviando os cadastros e os lançamentos…');
+ const ks=Object.keys(data).filter(k=>KEYS.includes(k));
+ const r=await sb.from('kv').upsert(ks.map(k=>({key:k,value:data[k],updated_at:new Date().toISOString()})));
+ if(r.error)throw new Error(r.error.message||'');
+ ks.forEach(k=>S[k]=data[k]);
+ Object.keys(urlCache).forEach(k=>delete urlCache[k]);
+ await preloadPhotos();
+ st('<b>Pronto.</b> Os dados estão na nuvem e já aparecem para todo mundo que tem acesso.');
+ toast('Dados carregados.');
+}
+
+/* cola o texto que o sistema antigo mostra em "Exportar dados" */
+function importText(){
+ const m=modal(`${mhead('Colar dados do sistema antigo')}<div class="grid">
+  <p class="muted small">No sistema antigo, clique em <b>Exportar dados</b>, depois em <b>Selecionar tudo</b>, copie com Cmd+C e cole aqui.</p>
+  <textarea id="ptx" placeholder="Cole aqui" style="width:100%;height:120px;font:12px ui-monospace,monospace"></textarea>
+  <p class="small" id="pts" style="min-height:1.5em"></p>
+  <div class="row"><span class="sp"></span><button class="btn" type="button" data-close>Fechar</button><button class="btn pri" id="pto">Carregar</button></div></div>`);
+ const st=t=>{const e=$('#pts');if(e)e.innerHTML=t};
+ $('#pto').onclick=async()=>{
+  const raw=$('#ptx').value.trim();
+  if(!raw){st('Cole o texto primeiro.');return}
+  $('#pto').disabled=true;
+  try{
+   const all=JSON.parse(raw);
+   const fm=all._files||{};delete all._files;
+   const ks=Object.keys(all).filter(k=>KEYS.includes(k));
+   if(!ks.length)throw new Error('esse texto não parece ser do sistema');
+   const n=ks.reduce((a,k)=>a+(Array.isArray(all[k])?all[k].length:0),0);
+   const names=Object.keys(fm);
+   st(`Lendo ${n} registro(s) e ${names.length} arquivo(s)…`);
+   const types={},files=names.map(k=>{types[k]=fm[k].t||'';return [k,()=>fetch('data:'+(fm[k].t||'application/octet-stream')+';base64,'+fm[k].d).then(r=>r.blob())]});
+   await pushToCloud(all,files,types,st);
+  }catch(e){st('<span style="color:var(--bad)">Falhou: '+esc(e.message||String(e))+'</span>');$('#pto').disabled=false}
+ };
 }
 
 /* ================= arrastar para reordenar (mouse e toque) ================= */
