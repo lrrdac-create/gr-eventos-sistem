@@ -60,14 +60,25 @@ const I={
 const ic=(n,s='')=>`<svg class="ico" viewBox="0 0 24 24" ${s}>${I[n]||''}</svg>`;
 
 /* ================= armazenamento local (IndexedDB, com memória como reserva) ================= */
-const Store={db:null,mem:{},ok:false,
+const Local={db:null,mem:{},ok:false,
  open(){return new Promise(res=>{try{const r=indexedDB.open('gr-events-sistem',1);r.onupgradeneeded=()=>{const d=r.result;if(!d.objectStoreNames.contains('kv'))d.createObjectStore('kv');if(!d.objectStoreNames.contains('files'))d.createObjectStore('files')};r.onsuccess=()=>{this.db=r.result;this.ok=true;res()};r.onerror=()=>res()}catch(e){res()}})},
  tx(store,mode,fn){return new Promise((res,rej)=>{if(!this.db){res(fn(null));return}try{const t=this.db.transaction(store,mode),o=t.objectStore(store);const r=fn(o);t.oncomplete=()=>res(r&&r.result);t.onerror=()=>rej(t.error)}catch(e){rej(e)}})},
  async get(k){if(!this.db)return this.mem[k];return new Promise(res=>{try{const r=this.db.transaction('kv').objectStore('kv').get(k);r.onsuccess=()=>res(r.result);r.onerror=()=>res(undefined)}catch(e){res(undefined)}})},
  async set(k,v){this.mem[k]=v;if(!this.db)return;try{await this.tx('kv','readwrite',o=>o.put(JSON.parse(JSON.stringify(v)),k))}catch(e){toast('Não foi possível salvar neste aparelho.')}},
  async putFile(blob){const id='f_'+uid();this.mem[id]=blob;if(this.db){try{await this.tx('files','readwrite',o=>o.put(blob,id))}catch(e){toast('Arquivo grande demais para guardar neste aparelho.')}}return id},
  async getFile(id){if(this.mem[id])return this.mem[id];if(!this.db)return null;return new Promise(res=>{try{const r=this.db.transaction('files').objectStore('files').get(id);r.onsuccess=()=>{if(r.result)this.mem[id]=r.result;res(r.result||null)};r.onerror=()=>res(null)}catch(e){res(null)}})},
- async delFile(id){delete this.mem[id];if(this.db){try{await this.tx('files','readwrite',o=>o.delete(id))}catch(e){}}}
+ async delFile(id){delete this.mem[id];if(this.db){try{await this.tx('files','readwrite',o=>o.delete(id))}catch(e){}}},
+ allFiles(){return new Promise(res=>{const out=[];if(!this.db){res(out);return}try{const r=this.db.transaction('files').objectStore('files').openCursor();r.onsuccess=()=>{const c=r.result;if(c){out.push([c.key,c.value]);c.continue()}else res(out)};r.onerror=()=>res(out)}catch(e){res(out)}})}
+};
+/* Store aponta para a nuvem quando há sessão; senão, para este aparelho. */
+const Store={
+ get ok(){return Cloud.on||Local.ok},
+ open(){return Local.open()},
+ get:k=>Cloud.on?Cloud.get(k):Local.get(k),
+ set:(k,v)=>Cloud.on?Cloud.set(k,v):Local.set(k,v),
+ putFile:(b,n)=>Cloud.on?Cloud.putFile(b,n):Local.putFile(b),
+ getFile:id=>Cloud.on?Cloud.getFile(id):Local.getFile(id),
+ delFile:id=>Cloud.on?Cloud.delFile(id):Local.delFile(id)
 };
 const urlCache={};
 function avatar(p,sz=36){p=p||{};const u=p.photo&&urlCache[p.photo];return u?`<img src="${u}" alt="" style="width:${sz}px;height:${sz}px;border-radius:50%;object-fit:cover;flex:none;background:#eee">`:`<span class="av" style="width:${sz}px;height:${sz}px;font-size:${Math.round(sz*.36)}px">${esc(initials(p.name))}</span>`}
@@ -83,11 +94,7 @@ const evTag=s=>({'PLANEJAMENTO':'warn','CONFIRMADO':'or','EM PRODUÇÃO':'dark',
 
 function defaults(){
  return {
-  users:[
-   {id:'u_rafa',name:'Rafa Garay',hash:'__H1__',role:'admin'},
-   {id:'u_mateus',name:'Mateus Amorim',hash:'__H2__',role:'prod'},
-   {id:'u_muller',name:'Muller Raposo',hash:'__H3__',role:'prod'}],
-  recurring:[],events:[],clients:[],suppliers:[],team:[],budgets:[],cash:[],leads:[],marketing:[],
+  users:[],recurring:[],events:[],clients:[],suppliers:[],team:[],budgets:[],cash:[],leads:[],marketing:[],
   history:Array.from({length:9},(_,i)=>({year:2018+i,proposals:0,quoted:0,closed:0,profit:0})),
   quals:CONTENT.quals.slice(),
   panels:{intro:CONTENT.intro,design:CONTENT.design,servicos:CONTENT.servicos,publico:CONTENT.publico},

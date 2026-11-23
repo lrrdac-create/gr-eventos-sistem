@@ -193,19 +193,41 @@ function migrate(){
  save('panels');
  if(S.quals&&S.quals[0]==='O evento é corporativo, social de alto padrão ou institucional?'){S.quals=CONTENT.quals.slice();save('quals')}
  if(!S.goals||!S.goals.items){S.goals=JSON.parse(JSON.stringify(CONTENT.goals));save('goals')}
+ if(!isAdmin())return;
  let ch=false;S.events.forEach(ev=>(ev.cc&&ev.cc.items||[]).forEach(i=>{const c=i.cashId&&S.cash.find(x=>x.id===i.cashId);if(!c){syncCash(ev,i);ch=true}}));if(ch)saveEv();
 }
 
 /* ================= início ================= */
-(async()=>{
- await Store.open();
+async function startSession(){
+ const me=await loadMe();
+ if(!me){renderLogin();return}
+ if(me.blocked){
+  await sb.auth.signOut();
+  renderLogin();
+  const e=$('#lerr');if(e){e.textContent='Este e-mail ainda não foi liberado pelo Administrador.'}
+  return;
+ }
+ ME=me;Cloud.on=true;
+ $('#root').innerHTML='<div style="display:grid;place-items:center;min-height:100vh;color:#8C8273">Carregando os dados…</div>';
  const D=defaults();
- for(const k of KEYS){const v=await Store.get(k);S[k]=v!==undefined?v:D[k];if(v===undefined)await Store.set(k,S[k])}
+ for(const k of KEYS){
+  let v;try{v=await Store.get(k)}catch(e){v=undefined}
+  S[k]=v!==undefined&&v!==null?v:D[k];
+  if(v===undefined||v===null)await Store.set(k,S[k]);
+ }
  if(!S.settings)S.settings={};
- let id=null;try{id=sessionStorage.getItem('gr-me')}catch(_){}
- migrate();try{runRecurring()}catch(e){}await preloadPhotos();
- ME=S.users.find(u=>u.id===id)||null;
+ migrate();
+ if(isAdmin()){try{runRecurring()}catch(e){}}
+ await preloadPhotos();
  route();
+}
+(async()=>{
+ await Local.open();
+ if(!sbInit()){$('#root').innerHTML='<div style="display:grid;place-items:center;min-height:100vh;padding:24px;text-align:center;color:#8C8273">Não foi possível carregar a nuvem.<br>Verifique a conexão e recarregue a página.</div>';return}
+ const s=(await sb.auth.getSession()).data.session;
+ if(s)await startSession();else renderLogin();
+ window.addEventListener('focus',()=>cloudReload(true));
+ setInterval(()=>{if(!document.hidden)cloudReload(true)},60000);
 })();
 }
 </script>

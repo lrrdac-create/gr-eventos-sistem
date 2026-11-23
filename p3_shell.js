@@ -1,7 +1,6 @@
 
 /* ================= login ================= */
 function renderLogin(){
- let pick=S.users[0]&&S.users[0].id;
  $('#root').innerHTML=`<div id="login">
  <div class="art">
   <div class="logo"><div class="mk">GR</div><span class="wm"><b>GR EVENTS</b><small>FEITO PARA ACONTECER</small></span></div>
@@ -13,18 +12,32 @@ function renderLogin(){
    <circle cx="360" cy="300" r="70" fill="#F7F3ED"/><path d="M325 300l24 24 46-50" stroke="#D45A20" stroke-width="16" fill="none" stroke-linecap="round" stroke-linejoin="round"/></g></svg>
  </div>
  <div class="form"><form class="box" id="lf">
-  <h2>Entrar</h2><p class="muted small">Escolha seu usuário e digite a senha.</p>
-  <div class="ulist" role="radiogroup">${S.users.map(u=>`<button type="button" class="ubtn ${u.id===pick?'on':''}" data-u="${u.id}" role="radio"><span class="av ${u.role==='admin'?'or':''}">${esc(initials(u.name))}</span><span><b>${esc(u.name)}</b><br><span class="muted small">${roleName(u.role)}</span></span></button>`).join('')}</div>
-  <label class="f"><span>Senha</span><input type="password" name="pw" autocomplete="current-password" required></label>
+  <h2 id="ltit">Entrar</h2><p class="muted small" id="lsub">Use o seu e-mail de trabalho e a sua senha.</p>
+  <label class="f"><span>E-mail</span><input type="email" name="email" autocomplete="username" required></label>
+  <label class="f"><span>Senha</span><input type="password" name="pw" autocomplete="current-password" minlength="6" required></label>
   <p class="small" id="lerr" style="color:var(--bad);min-height:1.5em"></p>
-  <button class="btn pri" type="submit">${ic('lock')} Entrar</button>
-  ${Store.ok?'':'<p class="small muted">Este navegador não permite guardar dados: o que for feito agora some ao fechar a página.</p>'}
+  <button class="btn pri" type="submit" id="lbtn">${ic('lock')} Entrar</button>
+  <p class="small muted" style="margin-top:12px">Primeiro acesso? <a href="#" id="ltog" style="color:var(--or)">Criar minha senha</a></p>
+  ${sb?'':'<p class="small" style="color:var(--bad)">A nuvem não carregou. Verifique a conexão e recarregue a página.</p>'}
  </form></div></div>`;
- $$('.ubtn').forEach(b=>b.onclick=()=>{pick=b.dataset.u;$$('.ubtn').forEach(x=>x.classList.toggle('on',x===b));$('#lf [name=pw]').focus()});
- $('#lf').onsubmit=e=>{e.preventDefault();const u=S.users.find(x=>x.id===pick);const pw=e.target.pw.value;
-  if(u&&u.hash===hpw(pw)){ME=u;try{sessionStorage.setItem('gr-me',u.id)}catch(_){};route()}else{$('#lerr').textContent='Senha incorreta.';e.target.pw.select()}};
+ let mode='in';
+ $('#ltog').onclick=e=>{e.preventDefault();mode=mode==='in'?'up':'in';
+  $('#ltit').textContent=mode==='in'?'Entrar':'Criar minha senha';
+  $('#lsub').textContent=mode==='in'?'Use o seu e-mail de trabalho e a sua senha.':'Só funciona para e-mails liberados pelo Administrador. Você vai receber um link de confirmação.';
+  $('#lbtn').innerHTML=(mode==='in'?ic('lock')+' Entrar':ic('plus')+' Criar acesso');
+  $('#ltog').textContent=mode==='in'?'Criar minha senha':'Já tenho senha, quero entrar';
+  $('#lerr').textContent='';};
+ $('#lf').onsubmit=async e=>{e.preventDefault();
+  const b=$('#lbtn'),err=$('#lerr');b.disabled=true;err.textContent='';err.style.color='var(--bad)';
+  try{
+   if(mode==='up'){await sbSignUp(e.target.email.value,e.target.pw.value);
+    err.style.color='var(--ok)';err.textContent='Acesso criado. Confirme pelo link enviado ao seu e-mail e depois entre.';b.disabled=false;return}
+   await sbSignIn(e.target.email.value,e.target.pw.value);
+   await startSession();
+  }catch(ex){err.textContent=authMsg(ex);b.disabled=false}
+ };
 }
-function logout(){ME=null;try{sessionStorage.removeItem('gr-me')}catch(_){};location.hash='';renderLogin()}
+async function logout(){ME=null;Cloud.on=false;try{await sb.auth.signOut()}catch(_){}location.hash='';renderLogin()}
 
 /* ================= layout ================= */
 const NAV=[
@@ -40,7 +53,7 @@ function shell(active){
   <a class="nav ${active==='dashboard'?'on':''}" href="#dashboard">${ic('home')} Dashboard</a>
   ${NAV.map(n=>n==='-'?'<div class="div"></div>':`<a class="nav ${active===n[0]?'on':''}" href="#${n[0]}">${ic(n[1])} ${n[2]}${n[0]==='projetos'&&newLeads?`<span class="badge">${newLeads}</span>`:''}</a>`).join('')}
   ${isAdmin()?`<div class="div"></div><a class="nav ${active==='usuarios'?'on':''}" href="#usuarios">${ic('shield')} Usuários</a>`:''}
-  <span class="sp"></span><p class="small" style="color:#8C8273;padding:8px">Dados guardados só neste aparelho.</p>`;
+  <span class="sp"></span><p class="small" style="color:#8C8273;padding:8px">Dados na nuvem · GR Events</p>`;
  $('#top').innerHTML=`<button class="ib" id="menuBtn" aria-label="Menu">${ic('menu')}</button><span class="sp"></span>
   <div class="who"><span class="av ${isAdmin()?'or':''}">${esc(initials(ME.name))}</span><span><b>${esc(ME.name)}</b><br><span class="muted">${roleName(ME.role)}</span></span></div>
   <button class="btn sm" id="sair">${ic('out')} Sair</button>`;
@@ -201,7 +214,7 @@ function cleanupTool(pre){
    ${li?`<label class="row" style="gap:10px"><input type="radio" name="scope" value="last" style="width:20px;height:20px;min-height:0;accent-color:var(--or)"> Só os do último envio de planilha (${esc(li.file||'')}, ${new Date(li.at).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})})</label>`:''}
    <label class="row" style="gap:10px"><input type="radio" name="scope" value="all" style="width:20px;height:20px;min-height:0;accent-color:var(--or)"> Todos, sem exceção</label></fieldset>
   <div id="clprev" class="card small" style="background:#FDEEEA;border-color:#F3C9C0"></div>
-  ${fld('Sua senha de Administrador, para confirmar','adm','','password','required autocomplete="current-password"')}
+  ${fld('Escreva APAGAR para confirmar','adm','','text','required autocomplete="off"')}
   <p class="small" data-err style="color:var(--bad)"></p>
   <div class="row"><span class="sp"></span><button class="btn" type="button" data-close>Cancelar</button><button class="btn dark" id="cldo">${ic('trash')} Apagar</button></div></form>`);
  const f=$('#clf');
@@ -211,41 +224,82 @@ function cleanupTool(pre){
   const inEv=[...p.team,...p.suppliers].filter(r=>used.has(r.id)).length;
   $('#clprev').innerHTML=n?`<b>Serão apagados ${n} registro(s):</b> ${REG.map(([k,nm])=>p[k].length?`${p[k].length} em ${nm}`:'').filter(Boolean).join(', ')}.<div class="muted" style="margin-top:6px">${REG.flatMap(([k])=>p[k].map(r=>esc(r.name))).slice(0,14).join(', ')}${n>14?'…':''}</div>${inEv?`<p style="color:var(--bad);margin-top:6px">${inEv} deles estão escalados em eventos: nos eventos aparecerão como "removido do cadastro".</p>`:''}<p style="margin-top:6px">Não dá para desfazer.</p>`:'<b>Nenhum registro nessa seleção.</b>';$('#cldo').disabled=!n};
  f.addEventListener('change',prev);prev();
- f.onsubmit=e=>{e.preventDefault();if(hpw(f.adm.value)!==ME.hash){m.querySelector('[data-err]').textContent='Senha do Administrador incorreta. Nada foi apagado.';return}
+ f.onsubmit=e=>{e.preventDefault();if(norm(f.adm.value)!=='apagar'){m.querySelector('[data-err]').textContent='Escreva APAGAR para confirmar. Nada foi apagado.';return}
   const p=pick();let n=0;REG.forEach(([k])=>{const ids=new Set(p[k].map(r=>r.id));if(!ids.size)return;p[k].forEach(r=>{if(r.photo){Store.delFile(r.photo);delete urlCache[r.photo]}});S[k]=S[k].filter(r=>!ids.has(r.id));n+=ids.size;save(k)});
   closeModal();toast(n+' registro(s) apagado(s).');route()};
 }
 
+
 /* ================= usuários (Administrador) ================= */
-VIEWS.usuarios=v=>{
- v.innerHTML=`<div class="row"><h1>Usuários</h1><span class="sp"></span><button class="btn pri" id="nu">${ic('plus')} Novo usuário</button></div>
- <p class="muted">Só o Administrador vê esta tela. Para criar, alterar ou remover um usuário, confirme com a sua senha.</p>
- <div class="card scroll"><table class="stack"><thead><tr><th>Nome</th><th>Perfil</th><th></th></tr></thead><tbody>
- ${S.users.map(u=>`<tr><td><div class="row"><span class="av ${u.role==='admin'?'or':''}">${esc(initials(u.name))}</span><b>${esc(u.name)}</b>${u.id===ME.id?'<span class="tag">você</span>':''}</div></td><td>${roleName(u.role)}</td><td class="num"><button class="btn sm" data-ed="${u.id}">${ic('edit')} Editar</button> ${u.id!==ME.id?`<button class="btn sm danger" data-rm="${u.id}">${ic('trash')} Remover</button>`:''}</td></tr>`).join('')}
- </tbody></table></div>`;
- $('#nu').onclick=()=>userForm();
- $$('[data-ed]',v).forEach(b=>b.onclick=()=>userForm(S.users.find(u=>u.id===b.dataset.ed)));
- $$('[data-rm]',v).forEach(b=>b.onclick=()=>{const u=S.users.find(x=>x.id===b.dataset.rm);
-  const m=modal(`${mhead('Remover '+u.name)}<form class="grid"><p>${esc(u.name)} não vai mais conseguir entrar.</p>${fld('Sua senha de Administrador','adm','','password','required autocomplete="current-password"')}<p class="small" data-err style="color:var(--bad)"></p><div class="row"><span class="sp"></span><button class="btn" type="button" data-close>Cancelar</button><button class="btn dark">Remover</button></div></form>`);
-  m.querySelector('form').onsubmit=e=>{e.preventDefault();if(hpw(e.target.adm.value)!==ME.hash){m.querySelector('[data-err]').textContent='Senha do Administrador incorreta.';return}
-   if(u.role==='admin'&&S.users.filter(x=>x.role==='admin').length<2){m.querySelector('[data-err]').textContent='É preciso manter ao menos um Administrador.';return}
-   S.users=S.users.filter(x=>x.id!==u.id);save('users');closeModal();toast('Usuário removido.');route()}});
+VIEWS.usuarios=async v=>{
+ v.innerHTML='<h1>Usuários</h1><p class="muted">Carregando…</p>';
+ const al=await sb.from('allowed_emails').select('email,role,name').order('email');
+ const pf=await sb.from('profiles').select('id,email,name,role');
+ if(al.error){v.innerHTML='<h1>Usuários</h1><p class="card">Não foi possível carregar: '+esc(al.error.message||'')+'</p>';return}
+ const has=new Set((pf.data||[]).map(p=>(p.email||'').toLowerCase()));
+ const prof=e=>(pf.data||[]).find(p=>(p.email||'').toLowerCase()===e.toLowerCase());
+ v.innerHTML=`<div class="row"><h1>Usuários</h1><span class="sp"></span><button class="btn pri" id="nu">${ic('plus')} Liberar e-mail</button></div>
+ <p class="muted">Só o Administrador vê esta tela. Libere o e-mail da pessoa aqui; ela cria a própria senha na tela de entrada, em "Primeiro acesso".</p>
+ <div class="card scroll"><table class="stack"><thead><tr><th>E-mail</th><th>Nome</th><th>Perfil</th><th>Situação</th><th></th></tr></thead><tbody>
+ ${(al.data||[]).map(u=>{const p=prof(u.email);return `<tr><td><div class="row"><span class="av ${u.role==='admin'?'or':''}">${esc(initials(u.name||u.email))}</span><b>${esc(u.email)}</b>${ME.email&&u.email.toLowerCase()===ME.email.toLowerCase()?'<span class="tag">você</span>':''}</div></td><td>${esc((p&&p.name)||u.name||'—')}</td><td>${roleName(u.role)}</td><td>${has.has(u.email.toLowerCase())?'<span class="tag ok">entrou</span>':'<span class="tag warn">ainda não criou a senha</span>'}</td><td class="num"><button class="btn sm" data-ed="${esc(u.email)}">${ic('edit')} Editar</button> ${ME.email&&u.email.toLowerCase()===ME.email.toLowerCase()?'':`<button class="btn sm danger" data-rm="${esc(u.email)}">${ic('trash')} Remover</button>`}</td></tr>`}).join('')||'<tr><td colspan="5" class="muted">Nenhum e-mail liberado.</td></tr>'}
+ </tbody></table></div>
+ <div class="card" style="margin-top:16px"><h3>Dados do sistema</h3>
+  <p class="muted small">Os dados ficam na nuvem (Supabase) e são os mesmos para todo mundo. Se este navegador ainda tiver dados antigos guardados só aqui, você pode enviá-los para a nuvem.</p>
+  <button class="btn" id="mig">${ic('up')} Enviar dados deste navegador para a nuvem</button></div>`;
+ $('#nu').onclick=()=>allowForm();
+ $$('[data-ed]',v).forEach(b=>b.onclick=()=>allowForm((al.data||[]).find(u=>u.email===b.dataset.ed)));
+ $$('[data-rm]',v).forEach(b=>b.onclick=()=>{const em=b.dataset.rm;const p=prof(em);
+  const m=modal(`${mhead('Remover acesso')}<form class="grid"><p><b>${esc(em)}</b> não vai mais conseguir entrar no sistema.</p><p class="small" data-err style="color:var(--bad)"></p><div class="row"><span class="sp"></span><button class="btn" type="button" data-close>Cancelar</button><button class="btn dark">Remover</button></div></form>`);
+  m.querySelector('form').onsubmit=async e=>{e.preventDefault();const err=m.querySelector('[data-err]');
+   const r1=await sb.from('allowed_emails').delete().eq('email',em);
+   if(r1.error){err.textContent=r1.error.message;return}
+   if(p){const r2=await sb.from('profiles').delete().eq('id',p.id);if(r2.error){err.textContent=r2.error.message;return}}
+   closeModal();toast('Acesso removido.');route()}});
+ $('#mig').onclick=migrateLocal;
 };
-function userForm(u){
+function allowForm(u){
  const isNew=!u;
- const m=modal(`${mhead(isNew?'Novo usuário':'Editar '+u.name)}<form class="grid">
-  ${fld('Nome','name',u?u.name:'','text','required')}
-  ${fld(isNew?'Senha':'Nova senha (deixe em branco para manter)','pw','','password',isNew?'required minlength="6" autocomplete="new-password"':'minlength="6" autocomplete="new-password"')}
+ const m=modal(`${mhead(isNew?'Liberar e-mail':'Editar '+u.email)}<form class="grid">
+  ${fld('E-mail','email',u?u.email:'','email',isNew?'required':'required readonly')}
+  ${fld('Nome','name',u?(u.name||''):'','text','required')}
   ${sel('Perfil','role',[['prod','Produção (sem valores financeiros)'],['admin','Administrador (vê tudo)']],u?u.role:'prod')}
-  <hr style="border:0;border-top:1px solid var(--line);width:100%">
-  ${fld('Sua senha de Administrador, para confirmar','adm','','password','required autocomplete="current-password"')}
+  <p class="small muted">Depois de liberado, a pessoa entra em "Primeiro acesso" na tela de entrada e cria a própria senha. A senha fica só com ela.</p>
   <p class="small" data-err style="color:var(--bad)"></p>
   <div class="row"><span class="sp"></span><button class="btn" type="button" data-close>Cancelar</button><button class="btn pri">Salvar</button></div></form>`);
- m.querySelector('form').onsubmit=e=>{e.preventDefault();const d=formData(e.target);const err=m.querySelector('[data-err]');
-  if(hpw(d.adm)!==ME.hash){err.textContent='Senha do Administrador incorreta. Nada foi salvo.';return}
-  if(S.users.some(x=>norm(x.name)===norm(d.name)&&(!u||x.id!==u.id))){err.textContent='Já existe um usuário com esse nome.';return}
-  if(u&&u.role==='admin'&&d.role!=='admin'&&S.users.filter(x=>x.role==='admin').length<2){err.textContent='É preciso manter ao menos um Administrador.';return}
-  if(isNew)S.users.push({id:'u_'+uid(),name:d.name.trim(),hash:hpw(d.pw),role:d.role});
-  else{u.name=d.name.trim();u.role=d.role;if(d.pw)u.hash=hpw(d.pw);if(u.id===ME.id)ME=u}
-  save('users');closeModal();toast(isNew?'Usuário criado.':'Usuário atualizado.');route()};
+ m.querySelector('form').onsubmit=async e=>{e.preventDefault();const d=formData(e.target);const err=m.querySelector('[data-err]');
+  const email=(u?u.email:d.email).trim().toLowerCase();
+  const r=await sb.from('allowed_emails').upsert({email,role:d.role,name:d.name.trim()});
+  if(r.error){err.textContent=r.error.message;return}
+  await sb.from('profiles').update({role:d.role,name:d.name.trim()}).eq('email',email);
+  closeModal();toast(isNew?'E-mail liberado.':'Acesso atualizado.');route()};
+}
+
+/* envia para a nuvem os dados guardados só neste navegador */
+async function migrateLocal(){
+ const m=modal(`${mhead('Enviar dados deste navegador para a nuvem')}<div class="grid"><p id="mgs">Procurando dados guardados neste aparelho…</p><div class="row"><span class="sp"></span><button class="btn" type="button" data-close>Fechar</button><button class="btn pri" id="mgo" disabled>Enviar</button></div></div>`);
+ const st=t=>{const e=$('#mgs');if(e)e.innerHTML=t};
+ await Local.open();
+ const loc={};let n=0;
+ for(const k of KEYS){const v=await Local.get(k);if(v!==undefined){loc[k]=v;if(Array.isArray(v))n+=v.length}}
+ const files=await Local.allFiles();
+ if(!Object.keys(loc).length){st('Não há nada guardado só neste aparelho. Nada a enviar.');return}
+ st(`Encontrei <b>${n}</b> registro(s) e <b>${files.length}</b> arquivo(s) neste aparelho.<br><span class="muted small">Enviar substitui o que está na nuvem hoje pelos dados deste aparelho.</span>`);
+ $('#mgo').disabled=false;
+ $('#mgo').onclick=async()=>{
+  $('#mgo').disabled=true;
+  let done=0;
+  for(const [id,blob] of files){
+   const r=await sb.storage.from('files').upload(id,blob,{contentType:blob.type||'application/octet-stream',upsert:true});
+   done++;st(`Enviando arquivos… ${done}/${files.length}`);
+   if(r.error&&!String(r.error.message||'').includes('exists')){st('Falha ao enviar um arquivo: '+esc(r.error.message||''));return}
+  }
+  st('Enviando os cadastros e os lançamentos…');
+  const rows=Object.keys(loc).map(k=>({key:k,value:loc[k]===undefined?null:loc[k],updated_at:new Date().toISOString()}));
+  const r=await sb.from('kv').upsert(rows);
+  if(r.error){st('Falha ao enviar: '+esc(r.error.message||''));return}
+  for(const k of KEYS)if(loc[k]!==undefined)S[k]=loc[k];
+  await preloadPhotos();
+  st('<b>Pronto.</b> Os dados estão na nuvem e aparecem para todo mundo que tem acesso.');
+  toast('Dados enviados para a nuvem.');
+ };
 }
