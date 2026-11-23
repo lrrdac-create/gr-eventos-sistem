@@ -963,11 +963,12 @@ async function importBackup(file){
  try{
   if(!window.JSZip)throw new Error('o leitor de ZIP não carregou; recarregue a página');
   const z=await JSZip.loadAsync(file);
-  const dj=z.file('data.json');
+  let base='',dj=z.file('data.json');
+  if(!dj)z.forEach((rel,f)=>{if(!dj&&!f.dir&&/(^|\/)data\.json$/.test(rel)){dj=f;base=rel.slice(0,rel.length-9)}});
   if(!dj)throw new Error('este ZIP não é um backup do sistema (falta o data.json)');
   const data=JSON.parse(await dj.async('string'));
-  let types={};const tj=z.file('types.json');if(tj){try{types=JSON.parse(await tj.async('string'))}catch(_){}}
-  const files=[];z.forEach((rel,f)=>{if(!f.dir&&rel.indexOf('files/')===0)files.push([rel.slice(6),f])});
+  let types={};const tj=z.file(base+'types.json');if(tj){try{types=JSON.parse(await tj.async('string'))}catch(_){}}
+  const pre=base+'files/',files=[];z.forEach((rel,f)=>{if(!f.dir&&rel.indexOf(pre)===0)files.push([rel.slice(pre.length),f])});
   const ks=Object.keys(data).filter(k=>KEYS.includes(k));
   const n=ks.reduce((a,k)=>a+(Array.isArray(data[k])?data[k].length:0),0);
   if(!ks.length)throw new Error('o backup está vazio');
