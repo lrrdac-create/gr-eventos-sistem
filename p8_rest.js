@@ -226,6 +226,7 @@ async function startSession(){
  if(!sbInit()){$('#root').innerHTML='<div style="display:grid;place-items:center;min-height:100vh;padding:24px;text-align:center;color:#8C8273">Não foi possível carregar a nuvem.<br>Verifique a conexão e recarregue a página.</div>';return}
  const s=(await sb.auth.getSession()).data.session;
  if(s)await startSession();else renderLogin();
+ if('serviceWorker'in navigator&&location.protocol==='https:'){try{navigator.serviceWorker.register('sw.js')}catch(e){}}
  window.addEventListener('focus',()=>cloudReload(true));
  setInterval(()=>{if(!document.hidden)cloudReload(true)},60000);
 })();
