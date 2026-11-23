@@ -14,13 +14,15 @@ function renderLogin(){
  <div class="form"><form class="box" id="lf">
   <h2 id="ltit">Entrar</h2><p class="muted small" id="lsub">Use o seu e-mail de trabalho e a sua senha.</p>
   <label class="f"><span>E-mail</span><input type="email" name="email" autocomplete="username" required></label>
-  <label class="f"><span>Senha</span><input type="password" name="pw" autocomplete="current-password" minlength="6" required></label>
+  <label class="f"><span>Senha</span><div class="pwbox"><input type="password" name="pw" id="lpw" autocomplete="current-password" minlength="6" required><button type="button" class="ib" id="lpwEye" aria-label="Mostrar senha" title="Mostrar senha">${ic('eye')}</button></div></label>
   <p class="small" id="lerr" style="color:var(--bad);min-height:1.5em"></p>
   <button class="btn pri" type="submit" id="lbtn">${ic('lock')} Entrar</button>
   <p class="small muted" style="margin-top:12px">Primeiro acesso? <a href="#" id="ltog" style="color:var(--or)">Criar minha senha</a></p>
   ${sb?'':'<p class="small" style="color:var(--bad)">A nuvem não carregou. Verifique a conexão e recarregue a página.</p>'}
  </form></div></div>`;
  let mode='in';
+ $('#lpwEye').onclick=()=>{const i=$('#lpw'),show=i.type==='password';i.type=show?'text':'password';
+  const t=show?'Ocultar senha':'Mostrar senha';const b=$('#lpwEye');b.innerHTML=ic(show?'eyeoff':'eye');b.setAttribute('aria-label',t);b.title=t;i.focus()};
  $('#ltog').onclick=e=>{e.preventDefault();mode=mode==='in'?'up':'in';
   $('#ltit').textContent=mode==='in'?'Entrar':'Criar minha senha';
   $('#lsub').textContent=mode==='in'?'Use o seu e-mail de trabalho e a sua senha.':'Só funciona para e-mails liberados pelo Administrador. Você vai receber um link de confirmação.';

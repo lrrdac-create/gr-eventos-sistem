@@ -32,6 +32,7 @@ input[type=checkbox]{width:20px;height:20px;min-height:0;accent-color:var(--or);
 input[type=file]{padding:8px}
 label.f{display:grid;gap:4px;font-size:13px;font-weight:600;color:var(--muted)}
 label.f>span{white-space:nowrap}
+.pwbox{position:relative}.pwbox input{padding-right:48px}.pwbox .ib{position:absolute;right:3px;top:50%;transform:translateY(-50%)}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:0 16px;border-radius:10px;border:1px solid var(--line2);background:var(--paper);cursor:pointer;font-weight:700;font-size:14px;white-space:nowrap;text-decoration:none;color:var(--ink)}
 .btn:hover{border-color:var(--ink)}
 .btn.pri{background:var(--or);border-color:var(--or);color:#fff}.btn.pri:hover{background:var(--or2)}
@@ -280,6 +281,8 @@ const I={
  pin:'<path d="M12 21s-7-6.2-7-11.5a7 7 0 0114 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>',
  menu:'<path d="M4 7h16M4 12h16M4 17h16"/>',
  x:'<path d="M6 6l12 12M18 6L6 18"/>',
+ eye:'<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+ eyeoff:'<path d="M3 3l18 18M10.6 5.1A10 10 0 0112 5c6.4 0 10 7 10 7a17 17 0 01-3.2 4.1M6.6 6.6C3.7 8.4 2 12 2 12s3.6 7 10 7c1.9 0 3.5-.6 4.9-1.4M9.9 9.9a3 3 0 004.2 4.2"/>',
  lock:'<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/>',
  chat:'<path d="M4 5h16v11H9l-5 4z"/>',
  check:'<path d="M5 12l5 5 9-10"/>',
@@ -649,13 +652,15 @@ function renderLogin(){
  <div class="form"><form class="box" id="lf">
   <h2 id="ltit">Entrar</h2><p class="muted small" id="lsub">Use o seu e-mail de trabalho e a sua senha.</p>
   <label class="f"><span>E-mail</span><input type="email" name="email" autocomplete="username" required></label>
-  <label class="f"><span>Senha</span><input type="password" name="pw" autocomplete="current-password" minlength="6" required></label>
+  <label class="f"><span>Senha</span><div class="pwbox"><input type="password" name="pw" id="lpw" autocomplete="current-password" minlength="6" required><button type="button" class="ib" id="lpwEye" aria-label="Mostrar senha" title="Mostrar senha">${ic('eye')}</button></div></label>
   <p class="small" id="lerr" style="color:var(--bad);min-height:1.5em"></p>
   <button class="btn pri" type="submit" id="lbtn">${ic('lock')} Entrar</button>
   <p class="small muted" style="margin-top:12px">Primeiro acesso? <a href="#" id="ltog" style="color:var(--or)">Criar minha senha</a></p>
   ${sb?'':'<p class="small" style="color:var(--bad)">A nuvem não carregou. Verifique a conexão e recarregue a página.</p>'}
  </form></div></div>`;
  let mode='in';
+ $('#lpwEye').onclick=()=>{const i=$('#lpw'),show=i.type==='password';i.type=show?'text':'password';
+  const t=show?'Ocultar senha':'Mostrar senha';const b=$('#lpwEye');b.innerHTML=ic(show?'eyeoff':'eye');b.setAttribute('aria-label',t);b.title=t;i.focus()};
  $('#ltog').onclick=e=>{e.preventDefault();mode=mode==='in'?'up':'in';
   $('#ltit').textContent=mode==='in'?'Entrar':'Criar minha senha';
   $('#lsub').textContent=mode==='in'?'Use o seu e-mail de trabalho e a sua senha.':'Só funciona para e-mails liberados pelo Administrador. Você vai receber um link de confirmação.';
