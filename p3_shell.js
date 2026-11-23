@@ -247,7 +247,8 @@ VIEWS.usuarios=async v=>{
  </tbody></table></div>
  <div class="card" style="margin-top:16px"><h3>Dados do sistema</h3>
   <p class="muted small">Os dados ficam na nuvem (Supabase) e são os mesmos para todo mundo. Se este navegador ainda tiver dados antigos guardados só aqui, você pode enviá-los para a nuvem.</p>
-  <button class="btn" id="mig">${ic('up')} Enviar dados deste navegador para a nuvem</button></div>`;
+  <div class="row"><button class="btn pri" id="mimp">${ic('up')} Carregar backup (.zip)</button><button class="btn" id="mig">Enviar dados deste navegador</button></div>
+  <input type="file" id="mfile" accept=".zip" hidden></div>`;
  $('#nu').onclick=()=>allowForm();
  $$('[data-ed]',v).forEach(b=>b.onclick=()=>allowForm((al.data||[]).find(u=>u.email===b.dataset.ed)));
  $$('[data-rm]',v).forEach(b=>b.onclick=()=>{const em=b.dataset.rm;const p=prof(em);
@@ -258,6 +259,8 @@ VIEWS.usuarios=async v=>{
    if(p){const r2=await sb.from('profiles').delete().eq('id',p.id);if(r2.error){err.textContent=r2.error.message;return}}
    closeModal();toast('Acesso removido.');route()}});
  $('#mig').onclick=migrateLocal;
+ $('#mimp').onclick=()=>$('#mfile').click();
+ $('#mfile').onchange=e=>{const f=e.target.files[0];e.target.value='';if(f)importBackup(f)};
 };
 function allowForm(u){
  const isNew=!u;
@@ -304,4 +307,47 @@ async function migrateLocal(){
   st('<b>Pronto.</b> Os dados estão na nuvem e aparecem para todo mundo que tem acesso.');
   toast('Dados enviados para a nuvem.');
  };
+}
+
+/* lê o backup (.zip) gerado na versão antiga e põe tudo na nuvem */
+async function importBackup(file){
+ const m=modal(`${mhead('Carregar backup')}<div class="grid"><p id="bks">Abrindo o arquivo…</p><div class="row"><span class="sp"></span><button class="btn" type="button" data-close>Fechar</button><button class="btn pri" id="bko" disabled>Carregar</button></div></div>`);
+ const st=t=>{const e=$('#bks');if(e)e.innerHTML=t};
+ try{
+  if(!window.JSZip)throw new Error('o leitor de ZIP não carregou; recarregue a página');
+  const z=await JSZip.loadAsync(file);
+  const dj=z.file('data.json');
+  if(!dj)throw new Error('este ZIP não é um backup do sistema (falta o data.json)');
+  const data=JSON.parse(await dj.async('string'));
+  let types={};const tj=z.file('types.json');if(tj){try{types=JSON.parse(await tj.async('string'))}catch(_){}}
+  const files=[];z.forEach((rel,f)=>{if(!f.dir&&rel.indexOf('files/')===0)files.push([rel.slice(6),f])});
+  const ks=Object.keys(data).filter(k=>KEYS.includes(k));
+  const n=ks.reduce((a,k)=>a+(Array.isArray(data[k])?data[k].length:0),0);
+  if(!ks.length)throw new Error('o backup está vazio');
+  st(`Encontrei <b>${n}</b> registro(s) e <b>${files.length}</b> arquivo(s).<br>
+   <span class="muted small">${ks.map(k=>`${k}: ${Array.isArray(data[k])?data[k].length:'ok'}`).join(' · ')}</span>
+   <br><br><b>Atenção:</b> carregar substitui o que está na nuvem hoje por este backup.`);
+  $('#bko').disabled=false;
+  $('#bko').onclick=async()=>{
+   $('#bko').disabled=true;
+   try{
+    let i=0;
+    for(const [name,f] of files){
+     const blob=await f.async('blob');
+     const r=await sb.storage.from('files').upload(name,blob,{contentType:types[name]||blob.type||'application/octet-stream',upsert:true});
+     if(r.error)throw new Error('arquivo '+name+': '+(r.error.message||''));
+     i++;if(i%3===0||i===files.length)st(`Enviando arquivos… ${i}/${files.length}`);
+    }
+    st('Enviando os cadastros e os lançamentos…');
+    const rows=ks.map(k=>({key:k,value:data[k],updated_at:new Date().toISOString()}));
+    const r=await sb.from('kv').upsert(rows);
+    if(r.error)throw new Error(r.error.message||'');
+    ks.forEach(k=>S[k]=data[k]);
+    Object.keys(urlCache).forEach(k=>delete urlCache[k]);
+    await preloadPhotos();
+    st('<b>Pronto.</b> Os dados estão na nuvem e já aparecem para todo mundo que tem acesso.');
+    toast('Backup carregado.');
+   }catch(e){st('<span style="color:var(--bad)">Falhou: '+esc(e.message||String(e))+'</span>');$('#bko').disabled=false}
+  };
+ }catch(e){st('<span style="color:var(--bad)">'+esc(e.message||String(e))+'</span>')}
 }
