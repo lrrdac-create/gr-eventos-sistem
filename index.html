@@ -243,7 +243,7 @@ tr.lost td{background:#FDEEEA}
 <script>
 {
 /* ================= utilidades ================= */
-const BUILD='1795629468';
+const BUILD='1795630301';
 const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
@@ -1341,17 +1341,27 @@ function orgStaticHTML(ev){
 }
 async function resumoHTML(ev,withPhotos=true,links=false){
  const P=id=>S.team.find(t=>t.id===id)||{},F=id=>S.suppliers.find(t=>t.id===id)||{};
- let photos='';if(withPhotos&&ev.photos.length){const urls=await Promise.all(ev.photos.map(async p=>{const b=await Store.getFile(p.fileId);if(!b)return '';return await new Promise(r=>{const fr=new FileReader();fr.onload=()=>r(fr.result);fr.readAsDataURL(b)})}));photos=`<h2>Fotos</h2><div class="ph">${ev.photos.map((p,i)=>urls[i]?`<figure style="margin:0"><img src="${urls[i]}" alt=""><figcaption>${esc(p.caption||'')}</figcaption></figure>`:'').join('')}</div>`}
- let docs='';if(ev.docs.length){const urls=links?await Promise.all(ev.docs.map(d=>fileURL(d.fileId))):[];docs=`<h2>Documentos</h2><table><thead><tr><th>Arquivo</th><th class="num">Tamanho</th></tr></thead><tbody>${ev.docs.map((d,i)=>`<tr><td>${urls[i]?`<a href="${urls[i]}" target="_blank" rel="noopener" style="color:#B04716;font-weight:700">${esc(d.name)}</a>`:esc(d.name)}</td><td class="num">${d.size?(d.size/1024).toFixed(0)+' KB':''}</td></tr>`).join('')}</tbody></table>`}
- return `<h1>${esc(ev.name)}</h1><p class="muted">${esc(ev.status)} · ${fdate(ev.start)}${ev.startTime?' '+ev.startTime:''}${ev.end&&ev.end!==ev.start?' a '+fdate(ev.end):''} · ${esc(ev.local||'')} ${esc(ev.address||'')}</p>
- <h2>Cliente</h2><p><b>${esc(ev.client||'—')}</b><br>Contato: ${esc(ev.contact||'—')} · ${esc(ev.phone||'')} · ${esc(ev.email||'')}</p>
- <h2>Equipe</h2>${ev.team.length?`<table><thead><tr><th>Nome</th><th>Função</th><th>Telefone</th><th>PIX</th><th>Camisa</th><th>Calça</th></tr></thead><tbody>${ev.team.map(a=>`<tr><td>${esc(P(a.personId).name||'')}</td><td>${esc(a.fn||P(a.personId).role||'')}</td><td>${esc(P(a.personId).phone||'')}</td><td>${esc(P(a.personId).pix||'')}</td><td>${esc(P(a.personId).shirt||'')}</td><td>${esc(P(a.personId).pants||'')}</td></tr>`).join('')}</tbody></table>`:'<p class="muted">—</p>'}
- <h2>Fornecedores</h2>${ev.suppliers.length?`<table><thead><tr><th>Fornecedor</th><th>Serviço</th><th>Contato</th><th>Telefone</th><th>E-mail</th></tr></thead><tbody>${ev.suppliers.map(a=>`<tr><td>${esc(F(a.supplierId).name||'')}</td><td>${esc(a.service||'')}</td><td>${esc(F(a.supplierId).contact||'')}</td><td>${esc(F(a.supplierId).phone||'')}</td><td>${esc(F(a.supplierId).email||'')}</td></tr>`).join('')}</tbody></table>`:'<p class="muted">—</p>'}
- ${ev.timeline.length?`<h2>Linha do tempo do dia</h2><table><tbody>${ev.timeline.map(s=>`<tr><td style="width:80px"><b>${esc(s.time)}</b></td><td>${esc(s.text)}</td><td>${esc(s.who||'')}</td></tr>`).join('')}</tbody></table>`:''}
- ${ev.notes?`<h2>Observações</h2><p>${esc(ev.notes).replace(/\n/g,'<br>')}</p>`:''}${orgStaticHTML(ev)}${docs}${photos}`;
+ const none='<p class="muted">—</p>',tel=v=>v?`<span style="white-space:nowrap">${esc(v)}</span>`:'';
+ let photos='';if(withPhotos&&ev.photos.length){const urls=await Promise.all(ev.photos.map(async p=>{const b=await Store.getFile(p.fileId);if(!b)return '';return await new Promise(r=>{const fr=new FileReader();fr.onload=()=>r(fr.result);fr.readAsDataURL(b)})}));photos=`<div class="ph">${ev.photos.map((p,i)=>urls[i]?`<figure style="margin:0"><img src="${urls[i]}" alt=""><figcaption>${esc(p.caption||'')}</figcaption></figure>`:'').join('')}</div>`}
+ let docs='';if(ev.docs.length){const urls=links?await Promise.all(ev.docs.map(d=>fileURL(d.fileId))):[];docs=`<table><thead><tr><th>Arquivo</th><th class="num">Tamanho</th></tr></thead><tbody>${ev.docs.map((d,i)=>`<tr><td>${urls[i]?`<a href="${urls[i]}" target="_blank" rel="noopener" style="color:#B04716;font-weight:700">${esc(d.name)}</a>`:esc(d.name)}</td><td class="num">${d.size?(d.size/1024).toFixed(0)+' KB':''}</td></tr>`).join('')}</tbody></table>`}
+ const info=[['Cliente',esc(ev.client)],['Contato',esc(ev.contact)],['Telefone',tel(ev.phone)],['E-mail',esc(ev.email)],['Status',esc(ev.status)],['Início',fdate(ev.start)+(ev.startTime?' às '+esc(ev.startTime):'')],['Término',(ev.end?fdate(ev.end):fdate(ev.start))+(ev.endTime?' às '+esc(ev.endTime):'')],['Local',esc(ev.local)],['Endereço',esc(ev.address)],['Participantes',esc(ev.guests)]];
+ const ck=ev.checklist||[],done=ck.filter(i=>i.done).length;
+ const sch=(ev.schedule||[]).slice().sort((x,y)=>((x.date||'')+(x.time||'')).localeCompare((y.date||'')+(y.time||'')));
+ const org=orgStaticHTML(ev);
+ return `<h1>${esc(ev.name)}</h1><p class="muted">${esc(ev.status)} · ${fdate(ev.start)}${ev.end&&ev.end!==ev.start?' a '+fdate(ev.end):''}${ev.local?' · '+esc(ev.local):''}</p>
+ <h2>Informações</h2><table><tbody>${info.map(([k,v])=>`<tr><th style="width:130px">${k}</th><td>${v&&v!=='—'?v:'—'}</td></tr>`).join('')}</tbody></table>
+ ${ev.notes?`<p style="margin-top:10px"><b>Observações:</b><br>${esc(ev.notes).replace(/\n/g,'<br>')}</p>`:''}
+ <h2>Equipe (${ev.team.length})</h2>${ev.team.length?`<table><thead><tr><th>Nome</th><th>Função</th><th>Telefone</th><th>PIX</th><th>Camisa</th><th>Calça</th></tr></thead><tbody>${ev.team.map(a=>{const p=P(a.personId);return `<tr><td>${esc(p.name||'(removido do cadastro)')}</td><td>${esc(a.fn||p.role||'')}</td><td>${tel(p.phone)}</td><td>${esc(p.pix||'')}</td><td>${esc(p.shirt||'')}</td><td>${esc(p.pants||'')}</td></tr>`}).join('')}</tbody></table>`:none}
+ <h2>Fornecedores (${ev.suppliers.length})</h2>${ev.suppliers.length?`<table><thead><tr><th>Fornecedor</th><th>Serviço</th><th>Contato</th><th>Telefone</th><th>E-mail</th></tr></thead><tbody>${ev.suppliers.map(a=>{const p=F(a.supplierId);return `<tr><td>${esc(p.name||'(removido do cadastro)')}</td><td>${esc(a.service||p.category||'')}</td><td>${esc(p.contact||'')}</td><td>${tel(p.phone)}</td><td>${esc(p.email||'')}</td></tr>`}).join('')}</tbody></table>`:none}
+ <h2>Checklist${ck.length?` (${done} de ${ck.length} concluídos)`:''}</h2>${ck.length?`<table><tbody>${ck.map(i=>`<tr><td style="width:34px;font-size:16px;${i.done?'color:#2F7D4F':''}">${i.done?'☑':'☐'}</td><td style="${i.done?'text-decoration:line-through;color:#6B6258':''}">${esc(i.text)}</td></tr>`).join('')}</tbody></table>`:none}
+ <h2>Cronograma</h2>${sch.length?`<table><thead><tr><th style="width:110px">Data</th><th style="width:70px">Hora</th><th>Atividade</th></tr></thead><tbody>${sch.map(x=>`<tr><td>${fdate(x.date)}</td><td><b>${esc(x.time||'')}</b></td><td>${esc(x.activity||'')}</td></tr>`).join('')}</tbody></table>`:none}
+ <h2>Linha do tempo</h2>${ev.timeline.length?`<table><thead><tr><th style="width:80px">Horário</th><th>Etapa</th><th>Colaborador</th></tr></thead><tbody>${ev.timeline.map(x=>`<tr><td><b>${esc(x.time)}</b></td><td>${esc(x.text)}</td><td>${esc(x.who||'')}</td></tr>`).join('')}</tbody></table>`:none}
+ <h2>Documentos (${ev.docs.length})</h2>${docs||none}
+ ${withPhotos?`<h2>Fotos (${ev.photos.length})</h2>${photos||none}`:''}
+ ${org||`<h2>Organograma</h2>${none}`}`;
 }
 TAB.resumo=async(t,ev)=>{
- t.innerHTML=`<div class="row noprint"><p class="muted">Página pronta para imprimir, com organograma, documentos e fotos. Não mostra valores financeiros.</p><span class="sp"></span><button class="btn pri" id="rp">${ic('print')} Imprimir</button></div><div class="card" id="rs">Carregando…</div>`;
+ t.innerHTML=`<div class="row noprint"><p class="muted">Página pronta para imprimir com tudo do evento: informações, equipe, fornecedores, checklist, cronograma, linha do tempo, documentos, fotos e organograma. Não mostra valores financeiros.</p><span class="sp"></span><button class="btn pri" id="rp">${ic('print')} Imprimir</button></div><div class="card" id="rs">Carregando…</div>`;
  const [h,hp]=await Promise.all([resumoHTML(ev,true,true),resumoHTML(ev)]);if(!$('#rs'))return;$('#rs').innerHTML=`<div class="prose" style="max-width:none">${h}</div>`;
  $('#rp').onclick=()=>printHTML('Resumo '+ev.name,hp);
 };
