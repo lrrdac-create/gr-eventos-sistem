@@ -196,7 +196,7 @@ function personForm(kind,p,after,opt={}){
  const fi=m.querySelector('#pfoto');if(fi)fi.onchange=()=>{newPhoto=fi.files[0];if(newPhoto){const u=URL.createObjectURL(newPhoto);$('#pfprev').innerHTML=`<img src="${u}" alt="" style="width:72px;height:72px;border-radius:50%;object-fit:cover">`}};
  m.querySelector('form').onsubmit=async e=>{e.preventDefault();const d=formData(e.target);if(d.rating!==undefined)d.rating=+d.rating;const key=isT?'team':'suppliers';
   if(newPhoto){if(p.photo){Store.delFile(p.photo);delete urlCache[p.photo]}d.photo=await Store.putFile(newPhoto);await fileURL(d.photo)}
-  if(p.id)Object.assign(S[key].find(x=>x.id===p.id),d);else{p={id:uid(),...d};S[key].push(p)}save(key);closeModal();after&&after(p)};
+  if(p.id)Object.assign(S[key].find(x=>x.id===p.id),d);else{p={...p,...d,id:uid()};S[key].push(p)}save(key);closeModal();after&&after(p)};
 }
 function eventPeople(t,ev,redraw,kind){
  const isT=kind==='team',reg=isT?S.team:S.suppliers,arr=isT?ev.team:ev.suppliers,k=isT?'personId':'supplierId',lbl=isT?'Função no evento':'Serviço no evento';

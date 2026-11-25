@@ -243,6 +243,7 @@ tr.lost td{background:#FDEEEA}
 <script>
 {
 /* ================= utilidades ================= */
+const BUILD='1795629468';
 const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
@@ -455,9 +456,20 @@ const authMsg=e=>{
  return e&&e.message?e.message:'Não foi possível concluir.';
 };
 
+/* avisa quando há uma versão nova do sistema publicada */
+let updShown=false;
+async function checkUpdate(){
+ if(updShown||!/^https?:$/.test(location.protocol))return;
+ try{const t=await (await fetch(location.pathname+'?v='+Date.now(),{cache:'no-store'})).text();const m=t.match(/const BUILD='(\d+)'/);
+  if(m&&m[1]!==BUILD){updShown=true;const b=document.createElement('div');b.setAttribute('role','status');
+   b.style.cssText='position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:200;background:#1C1713;color:#fff;padding:10px 10px 10px 16px;border-radius:12px;display:flex;gap:12px;align-items:center;box-shadow:0 8px 24px rgba(0,0,0,.25);font-weight:700;max-width:calc(100% - 24px)';
+   b.innerHTML='<span>Saiu uma versão nova do sistema.</span><button class="btn sm pri" type="button">Atualizar agora</button>';
+   b.querySelector('button').onclick=()=>location.reload();document.body.appendChild(b)}}catch(e){}
+}
 /* recarrega os dados da nuvem (outra pessoa pode ter mudado) */
 let syncing=false;
 async function cloudReload(render){
+ checkUpdate();
  if(!Cloud.on||syncing)return;
  syncing=true;
  try{
@@ -1246,7 +1258,7 @@ function personForm(kind,p,after,opt={}){
  const fi=m.querySelector('#pfoto');if(fi)fi.onchange=()=>{newPhoto=fi.files[0];if(newPhoto){const u=URL.createObjectURL(newPhoto);$('#pfprev').innerHTML=`<img src="${u}" alt="" style="width:72px;height:72px;border-radius:50%;object-fit:cover">`}};
  m.querySelector('form').onsubmit=async e=>{e.preventDefault();const d=formData(e.target);if(d.rating!==undefined)d.rating=+d.rating;const key=isT?'team':'suppliers';
   if(newPhoto){if(p.photo){Store.delFile(p.photo);delete urlCache[p.photo]}d.photo=await Store.putFile(newPhoto);await fileURL(d.photo)}
-  if(p.id)Object.assign(S[key].find(x=>x.id===p.id),d);else{p={id:uid(),...d};S[key].push(p)}save(key);closeModal();after&&after(p)};
+  if(p.id)Object.assign(S[key].find(x=>x.id===p.id),d);else{p={...p,...d,id:uid()};S[key].push(p)}save(key);closeModal();after&&after(p)};
 }
 function eventPeople(t,ev,redraw,kind){
  const isT=kind==='team',reg=isT?S.team:S.suppliers,arr=isT?ev.team:ev.suppliers,k=isT?'personId':'supplierId',lbl=isT?'Função no evento':'Serviço no evento';

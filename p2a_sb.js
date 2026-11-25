@@ -63,9 +63,20 @@ const authMsg=e=>{
  return e&&e.message?e.message:'Não foi possível concluir.';
 };
 
+/* avisa quando há uma versão nova do sistema publicada */
+let updShown=false;
+async function checkUpdate(){
+ if(updShown||!/^https?:$/.test(location.protocol))return;
+ try{const t=await (await fetch(location.pathname+'?v='+Date.now(),{cache:'no-store'})).text();const m=t.match(/const BUILD='(\d+)'/);
+  if(m&&m[1]!==BUILD){updShown=true;const b=document.createElement('div');b.setAttribute('role','status');
+   b.style.cssText='position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:200;background:#1C1713;color:#fff;padding:10px 10px 10px 16px;border-radius:12px;display:flex;gap:12px;align-items:center;box-shadow:0 8px 24px rgba(0,0,0,.25);font-weight:700;max-width:calc(100% - 24px)';
+   b.innerHTML='<span>Saiu uma versão nova do sistema.</span><button class="btn sm pri" type="button">Atualizar agora</button>';
+   b.querySelector('button').onclick=()=>location.reload();document.body.appendChild(b)}}catch(e){}
+}
 /* recarrega os dados da nuvem (outra pessoa pode ter mudado) */
 let syncing=false;
 async function cloudReload(render){
+ checkUpdate();
  if(!Cloud.on||syncing)return;
  syncing=true;
  try{
