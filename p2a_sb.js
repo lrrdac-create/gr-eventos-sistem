@@ -77,6 +77,7 @@ async function cloudReload(render){
     const nv=JSON.stringify(row.value),ov=JSON.stringify(S[row.key]);
     if(nv!==ov){S[row.key]=row.value;ch=true}
    });
+   const np=PENDING.length;try{await loadPending()}catch(e){}if(PENDING.length!==np)ch=true;
    if(ch&&render&&ME&&!document.querySelector('#modal.on')){await preloadPhotos();route()}
   }
  }catch(e){}

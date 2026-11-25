@@ -53,7 +53,7 @@ function shell(active){
  const newLeads=S.leads.filter(l=>l.stage==='novo').length;
  $('#side').innerHTML=`<a class="logo" href="#dashboard" style="text-decoration:none"><div class="mk">GR</div><span class="wm"><b>GR EVENTS</b><small>FEITO PARA ACONTECER</small></span></a>
   <a class="nav ${active==='dashboard'?'on':''}" href="#dashboard">${ic('home')} Dashboard</a>
-  ${NAV.map(n=>n==='-'?'<div class="div"></div>':`<a class="nav ${active===n[0]?'on':''}" href="#${n[0]}">${ic(n[1])} ${n[2]}${n[0]==='projetos'&&newLeads?`<span class="badge">${newLeads}</span>`:''}</a>`).join('')}
+  ${NAV.map(n=>n==='-'?'<div class="div"></div>':`<a class="nav ${active===n[0]?'on':''}" href="#${n[0]}">${ic(n[1])} ${n[2]}${n[0]==='projetos'&&newLeads?`<span class="badge">${newLeads}</span>`:''}${(n[0]==='equipe'||n[0]==='fornecedores')&&pendingOf(n[0]==='equipe'?'team':'suppliers').length?`<span class="badge" title="Cadastros aguardando aprovação">${pendingOf(n[0]==='equipe'?'team':'suppliers').length}</span>`:''}</a>`).join('')}
   ${isAdmin()?`<div class="div"></div><a class="nav ${active==='usuarios'?'on':''}" href="#usuarios">${ic('shield')} Usuários</a>`:''}
   <span class="sp"></span><p class="small" style="color:#8C8273;padding:8px">Dados na nuvem · GR Events</p>`;
  $('#top').innerHTML=`<button class="ib" id="menuBtn" aria-label="Menu">${ic('menu')}</button><span class="sp"></span>

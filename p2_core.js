@@ -128,9 +128,10 @@ const stars=(n,name)=>`<div class="stars ${name?'':'ro'}" ${name?`data-stars="${
 document.addEventListener('click',e=>{const b=e.target.closest('[data-stars] button');if(!b)return;const w=b.parentElement,v=+b.dataset.v;w.querySelector('input').value=v;w.querySelectorAll('button').forEach(x=>x.classList.toggle('on',+x.dataset.v<=v))});
 
 /* autocomplete genérico */
-function autocomplete(input,getList,onPick){let box;const close=()=>{box&&box.remove();box=null};
+function autocomplete(input,getList,onPick,opt={}){let box;const close=()=>{box&&box.remove();box=null};
  input.setAttribute('autocomplete','off');
- input.addEventListener('input',()=>{close();const q=norm(input.value);if(!q)return;const l=getList().filter(x=>norm(x.label).includes(q)).slice(0,8);if(!l.length)return;box=document.createElement('div');box.className='acl';box.innerHTML=l.map((x,i)=>`<button type="button" data-i="${i}" style="display:flex;align-items:center;gap:10px">${x.pre||''}<span>${esc(x.label)}${x.sub?` <span class="muted small">· ${esc(x.sub)}</span>`:''}</span></button>`).join('');input.parentElement.classList.add('ac');input.parentElement.appendChild(box);box.addEventListener('mousedown',e=>{const b=e.target.closest('button');if(!b)return;e.preventDefault();const it=l[+b.dataset.i];input.value=it.label;close();onPick&&onPick(it)})});
+ const show=()=>{close();const q=norm(input.value);if(!q&&!opt.all)return;let l=getList();if(q)l=l.filter(x=>norm(x.label+' '+(x.sub||'')).includes(q));else l=l.slice().sort((x,y)=>x.label.localeCompare(y.label,'pt-BR'));l=l.slice(0,q?8:60);if(!l.length)return;box=document.createElement('div');box.className='acl';box.innerHTML=l.map((x,i)=>`<button type="button" data-i="${i}" style="display:flex;align-items:center;gap:10px">${x.pre||''}<span>${esc(x.label)}${x.sub?` <span class="muted small">· ${esc(x.sub)}</span>`:''}</span></button>`).join('');input.parentElement.classList.add('ac');input.parentElement.appendChild(box);box.addEventListener('mousedown',e=>{const b=e.target.closest('button');if(!b)return;e.preventDefault();const it=l[+b.dataset.i];input.value=it.label;close();onPick&&onPick(it)})};
+ input.addEventListener('input',show);if(opt.all)input.addEventListener('focus',show);
  input.addEventListener('blur',()=>setTimeout(close,150))}
 
 /* downloads e impressão */

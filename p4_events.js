@@ -30,19 +30,41 @@ const gcalURL=e=>{const d=s=>(s||'').replace(/-/g,'');const t=x=>(x||'').replace
 const mapsURL=e=>'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent([e.local,e.address,'Rio de Janeiro'].filter(Boolean).join(', '));
 
 /* ================= formulário de novo evento ================= */
+/* cliente, equipe e fornecedores vêm da base de dados (busca ao digitar ou ao clicar no campo) */
+const teamPick=()=>S.team.map(p=>({label:p.name,sub:p.role,obj:p,pre:avatar(p,28)}));
+const supPick=()=>S.suppliers.map(p=>({label:p.name,sub:p.category,obj:p,pre:`<span class="av or" style="width:28px;height:28px;font-size:11px">${esc(initials(p.name))}</span>`}));
+function pickChips(box,arr,redraw){
+ box.innerHTML=arr.length?arr.map(p=>`<span class="tag" style="gap:6px;padding:4px 6px 4px 10px">${esc(p.name)}<button type="button" class="ib" data-x="${p.id}" aria-label="Tirar ${esc(p.name)}" style="width:22px;height:22px;min-height:0;padding:0">${ic('x','style="width:14px;height:14px"')}</button></span>`).join(''):'<span class="muted small">Ninguém escolhido.</span>';
+ $$('[data-x]',box).forEach(b=>b.onclick=()=>{arr.splice(arr.findIndex(x=>x.id===b.dataset.x),1);redraw()});
+}
 function eventForm(pre={},after){
+ const pickT=[],pickS=[];
  const m=modal(`${mhead('Novo Evento')}<form class="grid">
   ${fld('Nome do evento','name',pre.name||'','text','required')}
-  <div class="grid g2">${fld('Cliente','client',pre.client||'')}${sel('Status','status',EV_STATUS,pre.status||'PLANEJAMENTO')}</div>
+  <div class="grid g2"><div>${fld('Cliente (busque na base)','client',pre.client||'','text','placeholder="Clique para ver os clientes"')}<p class="small muted" id="nfch" style="margin-top:4px"></p></div>${sel('Status','status',EV_STATUS,pre.status||'PLANEJAMENTO')}</div>
   <div class="grid g2">${fld('Contato','contact',pre.contact||'')}${fld('Telefone','phone',pre.phone||'','tel')}</div>
   <div class="grid g2">${fld('E-mail','email',pre.email||'','email')}${fld('Participantes','guests',pre.guests||'')}</div>
   <div class="grid g2">${fld('Local','local',pre.local||'')}${fld('Endereço','address',pre.address||'')}</div>
   <div class="grid g2">${fld('Data de início','start',pre.start||'','date')}${fld('Hora de início','startTime',pre.startTime||'','time')}</div>
   <div class="grid g2">${fld('Data de término','end',pre.end||'','date')}${fld('Hora de término','endTime',pre.endTime||'','time')}</div>
+  <div class="grid g2">
+   <div class="grid" style="gap:6px"><label class="f"><span>Equipe (busque na base)</span><input id="nft" placeholder="Clique para ver a equipe"></label><div class="row" id="nftc" style="gap:6px"></div></div>
+   <div class="grid" style="gap:6px"><label class="f"><span>Fornecedores (busque na base)</span><input id="nfs" placeholder="Clique para ver os fornecedores"></label><div class="row" id="nfsc" style="gap:6px"></div></div>
+  </div>
+  <p class="muted small" style="margin-top:-6px">Não achou alguém? ${isAdmin()?'Mande o link de cadastro em Equipe ou Fornecedores, ou cadastre':'Cadastre'} depois nas abas Equipe e Fornecedores do evento.</p>
   ${txa('Observações','notes',pre.notes||'')}
   <div class="row"><span class="sp"></span><button class="btn" type="button" data-close>Cancelar</button><button class="btn pri">Salvar evento</button></div></form>`);
- autocomplete(m.querySelector('[name=client]'),clientList,it=>{const f=m.querySelector('form');if(!f.contact.value)f.contact.value=it.obj.name;if(!f.phone.value)f.phone.value=it.obj.phone||'';if(!f.email.value)f.email.value=it.obj.email||''});
- m.querySelector('form').onsubmit=e=>{e.preventDefault();const d=formData(e.target);if(d.end&&d.start&&d.end<d.start)d.end=d.start;
+ const f=m.querySelector('form');
+ const clientHint=()=>{const v=f.client.value.trim();$('#nfch').textContent=!v?'':S.clients.some(c=>norm(c.name)===norm(v))?'Cliente da base.':'Cliente novo: será adicionado à base ao salvar.'};
+ autocomplete(f.client,clientList,it=>{if(!f.contact.value)f.contact.value=it.obj.contact||it.obj.name;if(!f.phone.value)f.phone.value=it.obj.phone||'';if(!f.email.value)f.email.value=it.obj.email||'';clientHint()},{all:true});
+ f.client.addEventListener('input',clientHint);f.client.addEventListener('blur',()=>setTimeout(clientHint,200));clientHint();
+ const drawT=()=>pickChips($('#nftc'),pickT,drawT),drawS=()=>pickChips($('#nfsc'),pickS,drawS);drawT();drawS();
+ const picker=(inp,list,arr,draw)=>autocomplete(inp,()=>list().filter(x=>!arr.some(a=>a.id===x.obj.id)),it=>{arr.push(it.obj);inp.value='';draw();setTimeout(()=>inp.blur(),0)},{all:true});
+ picker($('#nft'),teamPick,pickT,drawT);picker($('#nfs'),supPick,pickS,drawS);
+ $$('#nft,#nfs',m).forEach(i=>i.addEventListener('keydown',e=>{if(e.key==='Enter')e.preventDefault()}));
+ f.onsubmit=e=>{e.preventDefault();const d=formData(f);if(d.end&&d.start&&d.end<d.start)d.end=d.start;
+  d.team=pickT.map(p=>({id:uid(),personId:p.id,fn:'',service:''}));
+  d.suppliers=pickS.map(p=>({id:uid(),supplierId:p.id,fn:'',service:p.category||''}));
   const ev=newEvent(d);S.events.push(ev);saveEv();ensureClient(d.client);closeModal();after&&after(ev);go('evento-'+ev.id)};
 }
 
@@ -146,15 +168,16 @@ TAB.info=(t,ev)=>{
   ${txa('Observações','notes',ev.notes)}
   <div class="row"><a class="btn" href="${gcalURL(ev)}" target="_blank" rel="noopener">${ic('cal')} Google Agenda</a><a class="btn" href="${mapsURL(ev)}" target="_blank" rel="noopener">${ic('pin')} Abrir no Maps</a><span class="sp"></span><button class="btn pri">Salvar</button></div></form>`;
  const f=$('#inf');
- autocomplete(f.client,clientList,it=>{if(!f.contact.value)f.contact.value=it.obj.name;if(!f.phone.value)f.phone.value=it.obj.phone||'';if(!f.email.value)f.email.value=it.obj.email||''});
+ autocomplete(f.client,clientList,it=>{if(!f.contact.value)f.contact.value=it.obj.contact||it.obj.name;if(!f.phone.value)f.phone.value=it.obj.phone||'';if(!f.email.value)f.email.value=it.obj.email||''},{all:true});
  f.onsubmit=e=>{e.preventDefault();const d=formData(f);if(d.end&&d.start&&d.end<d.start)d.end=d.start;Object.assign(ev,d);ev.cc.items.forEach(i=>syncCash(ev,i));saveEv();ensureClient(d.client);toast('Informações salvas.');route()};
 };
 
 /* --- Equipe e Fornecedores --- */
-function personForm(kind,p,after){
- const isT=kind==='team',title=(p?'Editar ':'Novo ')+(isT?'colaborador':'fornecedor');p=p||{};
- const m=modal(`${mhead(title)}<form class="grid">
-  ${isT?`<div class="row" style="gap:14px"><span id="pfprev">${avatar(p,72)}</span><label class="f sp"><span>Foto (aparece ao buscar e escalar)</span><input type="file" id="pfoto" accept="image/*"></label></div>`:''}
+function personForm(kind,p,after,opt={}){
+ const isT=kind==='team',title=opt.title||(p&&p.id?'Editar ':'Novo ')+(isT?'colaborador':'fornecedor');p=p||{};
+ const pv=isT&&opt.photoBlob?`<img src="${URL.createObjectURL(opt.photoBlob)}" alt="" style="width:72px;height:72px;border-radius:50%;object-fit:cover">`:avatar(p,72);
+ const m=modal(`${mhead(title)}<form class="grid">${opt.note||''}
+  ${isT?`<div class="row" style="gap:14px"><span id="pfprev">${pv}</span><label class="f sp"><span>Foto (aparece ao buscar e escalar)</span><input type="file" id="pfoto" accept="image/*"></label></div>`:''}
   ${fld('Nome','name',p.name||'','text','required')}
   <div class="grid g2">${isT?fld('Função','role',p.role||''):fld('Categoria / serviço','category',p.category||'')}${fld('Telefone','phone',p.phone||'','tel')}</div>
   <div class="grid g2">${fld('CPF / CNPJ','doc',p.doc||'')}${fld('E-mail','email',p.email||'','email')}</div>
@@ -163,8 +186,9 @@ function personForm(kind,p,after){
   ${isT?`<div class="grid g2">${fld('RG','rg',p.rg||'')}<label class="f"><span>Pontuação</span>${stars(p.rating||0,'rating')}</label></div>`:`<div class="grid g2">${fld('Faixa de preço','price',p.price||'')}${fld('Operação','operation',p.operation||'','text','list="opl"')}</div><datalist id="opl"><option>ALUGUEL</option><option>VENDA</option><option>SERVIÇO</option></datalist>
   <div class="grid g2">${fld('Dados bancários','bank',p.bank||'')}<label class="f"><span>Avaliação</span>${stars(p.rating||0,'rating')}</label></div>`}
   ${txa('Observações','notes',p.notes||'')}
-  <div class="row"><span class="sp"></span><button class="btn" type="button" data-close>Cancelar</button><button class="btn pri">Salvar</button></div></form>`);
- let newPhoto=null;
+  <div class="row"><span class="sp"></span><button class="btn" type="button" ${opt.onCancel?'data-pfc':'data-close'}>${opt.onCancel?'Voltar':'Cancelar'}</button><button class="btn pri">${esc(opt.ok||'Salvar')}</button></div></form>`);
+ if(opt.onCancel)m.querySelector('[data-pfc]').onclick=opt.onCancel;
+ let newPhoto=isT&&opt.photoBlob||null;
  const fi=m.querySelector('#pfoto');if(fi)fi.onchange=()=>{newPhoto=fi.files[0];if(newPhoto){const u=URL.createObjectURL(newPhoto);$('#pfprev').innerHTML=`<img src="${u}" alt="" style="width:72px;height:72px;border-radius:50%;object-fit:cover">`}};
  m.querySelector('form').onsubmit=async e=>{e.preventDefault();const d=formData(e.target);if(d.rating!==undefined)d.rating=+d.rating;const key=isT?'team':'suppliers';
   if(newPhoto){if(p.photo){Store.delFile(p.photo);delete urlCache[p.photo]}d.photo=await Store.putFile(newPhoto);await fileURL(d.photo)}
@@ -179,7 +203,7 @@ function eventPeople(t,ev,redraw,kind){
   ${arr.map(a=>{const p=find(a[k])||{name:'(removido do cadastro)'};return `<tr data-id="${a.id}"><td><div class="row" style="gap:10px;flex-wrap:nowrap">${isT?avatar(p,40):''}<b>${esc(p.name)}</b></div></td><td><input data-fn="${a.id}" value="${esc(isT?a.fn:a.service)}" style="min-height:36px;padding:6px 8px" aria-label="${lbl}"></td><td class="nw">${esc(p.phone||'')}</td><td>${esc(isT?p.pix||'':p.email||'')}</td>${isT?'':`<td>${stars(p.rating||0)}</td>`}<td class="num"><button class="ib" data-pe="${a.id}" aria-label="Editar">${ic('edit')}</button><button class="ib" data-pr="${a.id}" aria-label="Remover do evento">${ic('trash')}</button></td></tr>`}).join('')}
   </tbody></table></div>`:`<div class="empty">Ninguém adicionado ainda. Busque no cadastro ou cadastre alguém novo.</div>`}</div>`;
  const add=p=>{if(arr.some(a=>a[k]===p.id)){toast('Já está no evento.');return}arr.push({id:uid(),[k]:p.id,fn:'',service:isT?'':(p.category||'')});saveEv();redraw()};
- autocomplete($('#padd'),()=>reg.map(p=>({label:p.name,sub:isT?p.role:p.category,obj:p,pre:isT?avatar(p,32):''})),it=>add(it.obj));
+ autocomplete($('#padd'),()=>reg.filter(p=>!arr.some(a=>a[k]===p.id)).map(p=>({label:p.name,sub:isT?p.role:p.category,obj:p,pre:isT?avatar(p,32):''})),it=>add(it.obj),{all:true});
  $('#pnew').onclick=()=>personForm(kind,null,p=>add(p));
  $$('[data-fn]',t).forEach(i=>i.onchange=()=>{const a=arr.find(x=>x.id===i.dataset.fn);if(isT)a.fn=i.value;else a.service=i.value;saveEv()});
  $$('[data-pe]',t).forEach(b=>b.onclick=()=>{const a=arr.find(x=>x.id===b.dataset.pe);const p=find(a[k]);if(p)personForm(kind,p,redraw)});
@@ -234,18 +258,34 @@ TAB.timeline=(t,ev,redraw)=>{
 };
 
 /* --- Resumo --- */
-async function resumoHTML(ev,withPhotos=true){
+/* organograma desenhado como imagem fixa (cabe na tela e na impressão) */
+function orgStaticHTML(ev){
+ const N=(ev.org&&ev.org.nodes)||[];if(!N.length)return '';
+ const W=190,lines=(t,n)=>Math.max(1,Math.ceil(String(t||'').length/n));
+ const hOf=n=>Math.max(38,16+18*lines(n.title,17))+Math.max(28,12+15*lines(n.sub,24));
+ const x0=Math.min(...N.map(n=>n.x))-12,y0=Math.min(...N.map(n=>n.y))-12;
+ const B={};N.forEach(n=>B[n.id]={x:n.x-x0,y:n.y-y0,w:W,h:hOf(n)});
+ const Wt=Math.max(...Object.values(B).map(b=>b.x+b.w))+12,Ht=Math.max(...Object.values(B).map(b=>b.y+b.h))+12;
+ const clip=(b,tx,ty)=>{const cx=b.x+b.w/2,cy=b.y+b.h/2,dx=tx-cx,dy=ty-cy;if(!dx&&!dy)return {x:cx,y:cy};const k=Math.min(Math.abs((b.w/2+4)/(dx||1e-9)),Math.abs((b.h/2+4)/(dy||1e-9)));return {x:cx+dx*k,y:cy+dy*k}};
+ const edges=(ev.org.edges||[]).map(e=>{const a=B[e.from],b=B[e.to];if(!a||!b)return '';const p=clip(a,b.x+b.w/2,b.y+b.h/2),q=clip(b,a.x+a.w/2,a.y+a.h/2);return `<line x1="${p.x}" y1="${p.y}" x2="${q.x}" y2="${q.y}" stroke="#1C1713" stroke-width="2" marker-end="url(#rah)"/>`}).join('');
+ const pc='-webkit-print-color-adjust:exact;print-color-adjust:exact;';
+ const nodes=N.map(n=>{const b=B[n.id],c=n.color||'#1C1713',lt=['#E8B21F'].includes(c);return `<div style="position:absolute;left:${b.x}px;top:${b.y}px;width:${W}px;border:2px solid ${c};border-radius:10px;background:#fff;overflow:hidden;box-sizing:border-box;${pc}"><div style="padding:9px 10px 7px;font-weight:800;font-size:14px;line-height:1.25;text-align:center;overflow-wrap:anywhere">${esc(n.title)}</div><div style="padding:6px 10px;background:${c};color:${lt?'#1C1713':'#fff'};font-size:12px;line-height:1.3;text-align:center;min-height:16px;overflow-wrap:anywhere;${pc}">${esc(n.sub||'')}</div></div>`}).join('');
+ const z=Math.min(1,700/Wt);
+ return `<h2>Organograma</h2><div style="overflow-x:auto"><div style="position:relative;width:${Wt}px;height:${Ht}px;zoom:${z};page-break-inside:avoid"><svg width="${Wt}" height="${Ht}" style="position:absolute;inset:0;overflow:visible"><defs><marker id="rah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#1C1713"/></marker></defs>${edges}</svg>${nodes}</div></div>`;
+}
+async function resumoHTML(ev,withPhotos=true,links=false){
  const P=id=>S.team.find(t=>t.id===id)||{},F=id=>S.suppliers.find(t=>t.id===id)||{};
  let photos='';if(withPhotos&&ev.photos.length){const urls=await Promise.all(ev.photos.map(async p=>{const b=await Store.getFile(p.fileId);if(!b)return '';return await new Promise(r=>{const fr=new FileReader();fr.onload=()=>r(fr.result);fr.readAsDataURL(b)})}));photos=`<h2>Fotos</h2><div class="ph">${ev.photos.map((p,i)=>urls[i]?`<figure style="margin:0"><img src="${urls[i]}" alt=""><figcaption>${esc(p.caption||'')}</figcaption></figure>`:'').join('')}</div>`}
+ let docs='';if(ev.docs.length){const urls=links?await Promise.all(ev.docs.map(d=>fileURL(d.fileId))):[];docs=`<h2>Documentos</h2><table><thead><tr><th>Arquivo</th><th class="num">Tamanho</th></tr></thead><tbody>${ev.docs.map((d,i)=>`<tr><td>${urls[i]?`<a href="${urls[i]}" target="_blank" rel="noopener" style="color:#B04716;font-weight:700">${esc(d.name)}</a>`:esc(d.name)}</td><td class="num">${d.size?(d.size/1024).toFixed(0)+' KB':''}</td></tr>`).join('')}</tbody></table>`}
  return `<h1>${esc(ev.name)}</h1><p class="muted">${esc(ev.status)} · ${fdate(ev.start)}${ev.startTime?' '+ev.startTime:''}${ev.end&&ev.end!==ev.start?' a '+fdate(ev.end):''} · ${esc(ev.local||'')} ${esc(ev.address||'')}</p>
  <h2>Cliente</h2><p><b>${esc(ev.client||'—')}</b><br>Contato: ${esc(ev.contact||'—')} · ${esc(ev.phone||'')} · ${esc(ev.email||'')}</p>
  <h2>Equipe</h2>${ev.team.length?`<table><thead><tr><th>Nome</th><th>Função</th><th>Telefone</th><th>PIX</th></tr></thead><tbody>${ev.team.map(a=>`<tr><td>${esc(P(a.personId).name||'')}</td><td>${esc(a.fn||P(a.personId).role||'')}</td><td>${esc(P(a.personId).phone||'')}</td><td>${esc(P(a.personId).pix||'')}</td></tr>`).join('')}</tbody></table>`:'<p class="muted">—</p>'}
  <h2>Fornecedores</h2>${ev.suppliers.length?`<table><thead><tr><th>Fornecedor</th><th>Serviço</th><th>Contato</th><th>Telefone</th><th>E-mail</th></tr></thead><tbody>${ev.suppliers.map(a=>`<tr><td>${esc(F(a.supplierId).name||'')}</td><td>${esc(a.service||'')}</td><td>${esc(F(a.supplierId).contact||'')}</td><td>${esc(F(a.supplierId).phone||'')}</td><td>${esc(F(a.supplierId).email||'')}</td></tr>`).join('')}</tbody></table>`:'<p class="muted">—</p>'}
  ${ev.timeline.length?`<h2>Linha do tempo do dia</h2><table><tbody>${ev.timeline.map(s=>`<tr><td style="width:80px"><b>${esc(s.time)}</b></td><td>${esc(s.text)}</td><td>${esc(s.who||'')}</td></tr>`).join('')}</tbody></table>`:''}
- ${ev.notes?`<h2>Observações</h2><p>${esc(ev.notes).replace(/\n/g,'<br>')}</p>`:''}${photos}`;
+ ${ev.notes?`<h2>Observações</h2><p>${esc(ev.notes).replace(/\n/g,'<br>')}</p>`:''}${orgStaticHTML(ev)}${docs}${photos}`;
 }
 TAB.resumo=async(t,ev)=>{
- t.innerHTML=`<div class="row noprint"><p class="muted">Página pronta para imprimir. Não mostra valores financeiros.</p><span class="sp"></span><button class="btn pri" id="rp">${ic('print')} Imprimir</button></div><div class="card" id="rs">Carregando…</div>`;
- const h=await resumoHTML(ev);$('#rs').innerHTML=`<div class="prose" style="max-width:none">${h}</div>`;
- $('#rp').onclick=()=>printHTML('Resumo '+ev.name,h);
+ t.innerHTML=`<div class="row noprint"><p class="muted">Página pronta para imprimir, com organograma, documentos e fotos. Não mostra valores financeiros.</p><span class="sp"></span><button class="btn pri" id="rp">${ic('print')} Imprimir</button></div><div class="card" id="rs">Carregando…</div>`;
+ const [h,hp]=await Promise.all([resumoHTML(ev,true,true),resumoHTML(ev)]);if(!$('#rs'))return;$('#rs').innerHTML=`<div class="prose" style="max-width:none">${h}</div>`;
+ $('#rp').onclick=()=>printHTML('Resumo '+ev.name,hp);
 };

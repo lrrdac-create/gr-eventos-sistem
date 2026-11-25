@@ -370,9 +370,10 @@ const stars=(n,name)=>`<div class="stars ${name?'':'ro'}" ${name?`data-stars="${
 document.addEventListener('click',e=>{const b=e.target.closest('[data-stars] button');if(!b)return;const w=b.parentElement,v=+b.dataset.v;w.querySelector('input').value=v;w.querySelectorAll('button').forEach(x=>x.classList.toggle('on',+x.dataset.v<=v))});
 
 /* autocomplete genérico */
-function autocomplete(input,getList,onPick){let box;const close=()=>{box&&box.remove();box=null};
+function autocomplete(input,getList,onPick,opt={}){let box;const close=()=>{box&&box.remove();box=null};
  input.setAttribute('autocomplete','off');
- input.addEventListener('input',()=>{close();const q=norm(input.value);if(!q)return;const l=getList().filter(x=>norm(x.label).includes(q)).slice(0,8);if(!l.length)return;box=document.createElement('div');box.className='acl';box.innerHTML=l.map((x,i)=>`<button type="button" data-i="${i}" style="display:flex;align-items:center;gap:10px">${x.pre||''}<span>${esc(x.label)}${x.sub?` <span class="muted small">· ${esc(x.sub)}</span>`:''}</span></button>`).join('');input.parentElement.classList.add('ac');input.parentElement.appendChild(box);box.addEventListener('mousedown',e=>{const b=e.target.closest('button');if(!b)return;e.preventDefault();const it=l[+b.dataset.i];input.value=it.label;close();onPick&&onPick(it)})});
+ const show=()=>{close();const q=norm(input.value);if(!q&&!opt.all)return;let l=getList();if(q)l=l.filter(x=>norm(x.label+' '+(x.sub||'')).includes(q));else l=l.slice().sort((x,y)=>x.label.localeCompare(y.label,'pt-BR'));l=l.slice(0,q?8:60);if(!l.length)return;box=document.createElement('div');box.className='acl';box.innerHTML=l.map((x,i)=>`<button type="button" data-i="${i}" style="display:flex;align-items:center;gap:10px">${x.pre||''}<span>${esc(x.label)}${x.sub?` <span class="muted small">· ${esc(x.sub)}</span>`:''}</span></button>`).join('');input.parentElement.classList.add('ac');input.parentElement.appendChild(box);box.addEventListener('mousedown',e=>{const b=e.target.closest('button');if(!b)return;e.preventDefault();const it=l[+b.dataset.i];input.value=it.label;close();onPick&&onPick(it)})};
+ input.addEventListener('input',show);if(opt.all)input.addEventListener('focus',show);
  input.addEventListener('blur',()=>setTimeout(close,150))}
 
 /* downloads e impressão */
@@ -468,6 +469,7 @@ async function cloudReload(render){
     const nv=JSON.stringify(row.value),ov=JSON.stringify(S[row.key]);
     if(nv!==ov){S[row.key]=row.value;ch=true}
    });
+   const np=PENDING.length;try{await loadPending()}catch(e){}if(PENDING.length!==np)ch=true;
    if(ch&&render&&ME&&!document.querySelector('#modal.on')){await preloadPhotos();route()}
   }
  }catch(e){}
@@ -700,7 +702,7 @@ function shell(active){
  const newLeads=S.leads.filter(l=>l.stage==='novo').length;
  $('#side').innerHTML=`<a class="logo" href="#dashboard" style="text-decoration:none"><div class="mk">GR</div><span class="wm"><b>GR EVENTS</b><small>FEITO PARA ACONTECER</small></span></a>
   <a class="nav ${active==='dashboard'?'on':''}" href="#dashboard">${ic('home')} Dashboard</a>
-  ${NAV.map(n=>n==='-'?'<div class="div"></div>':`<a class="nav ${active===n[0]?'on':''}" href="#${n[0]}">${ic(n[1])} ${n[2]}${n[0]==='projetos'&&newLeads?`<span class="badge">${newLeads}</span>`:''}</a>`).join('')}
+  ${NAV.map(n=>n==='-'?'<div class="div"></div>':`<a class="nav ${active===n[0]?'on':''}" href="#${n[0]}">${ic(n[1])} ${n[2]}${n[0]==='projetos'&&newLeads?`<span class="badge">${newLeads}</span>`:''}${(n[0]==='equipe'||n[0]==='fornecedores')&&pendingOf(n[0]==='equipe'?'team':'suppliers').length?`<span class="badge" title="Cadastros aguardando aprovação">${pendingOf(n[0]==='equipe'?'team':'suppliers').length}</span>`:''}</a>`).join('')}
   ${isAdmin()?`<div class="div"></div><a class="nav ${active==='usuarios'?'on':''}" href="#usuarios">${ic('shield')} Usuários</a>`:''}
   <span class="sp"></span><p class="small" style="color:#8C8273;padding:8px">Dados na nuvem · GR Events</p>`;
  $('#top').innerHTML=`<button class="ib" id="menuBtn" aria-label="Menu">${ic('menu')}</button><span class="sp"></span>
@@ -1078,19 +1080,41 @@ const gcalURL=e=>{const d=s=>(s||'').replace(/-/g,'');const t=x=>(x||'').replace
 const mapsURL=e=>'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent([e.local,e.address,'Rio de Janeiro'].filter(Boolean).join(', '));
 
 /* ================= formulário de novo evento ================= */
+/* cliente, equipe e fornecedores vêm da base de dados (busca ao digitar ou ao clicar no campo) */
+const teamPick=()=>S.team.map(p=>({label:p.name,sub:p.role,obj:p,pre:avatar(p,28)}));
+const supPick=()=>S.suppliers.map(p=>({label:p.name,sub:p.category,obj:p,pre:`<span class="av or" style="width:28px;height:28px;font-size:11px">${esc(initials(p.name))}</span>`}));
+function pickChips(box,arr,redraw){
+ box.innerHTML=arr.length?arr.map(p=>`<span class="tag" style="gap:6px;padding:4px 6px 4px 10px">${esc(p.name)}<button type="button" class="ib" data-x="${p.id}" aria-label="Tirar ${esc(p.name)}" style="width:22px;height:22px;min-height:0;padding:0">${ic('x','style="width:14px;height:14px"')}</button></span>`).join(''):'<span class="muted small">Ninguém escolhido.</span>';
+ $$('[data-x]',box).forEach(b=>b.onclick=()=>{arr.splice(arr.findIndex(x=>x.id===b.dataset.x),1);redraw()});
+}
 function eventForm(pre={},after){
+ const pickT=[],pickS=[];
  const m=modal(`${mhead('Novo Evento')}<form class="grid">
   ${fld('Nome do evento','name',pre.name||'','text','required')}
-  <div class="grid g2">${fld('Cliente','client',pre.client||'')}${sel('Status','status',EV_STATUS,pre.status||'PLANEJAMENTO')}</div>
+  <div class="grid g2"><div>${fld('Cliente (busque na base)','client',pre.client||'','text','placeholder="Clique para ver os clientes"')}<p class="small muted" id="nfch" style="margin-top:4px"></p></div>${sel('Status','status',EV_STATUS,pre.status||'PLANEJAMENTO')}</div>
   <div class="grid g2">${fld('Contato','contact',pre.contact||'')}${fld('Telefone','phone',pre.phone||'','tel')}</div>
   <div class="grid g2">${fld('E-mail','email',pre.email||'','email')}${fld('Participantes','guests',pre.guests||'')}</div>
   <div class="grid g2">${fld('Local','local',pre.local||'')}${fld('Endereço','address',pre.address||'')}</div>
   <div class="grid g2">${fld('Data de início','start',pre.start||'','date')}${fld('Hora de início','startTime',pre.startTime||'','time')}</div>
   <div class="grid g2">${fld('Data de término','end',pre.end||'','date')}${fld('Hora de término','endTime',pre.endTime||'','time')}</div>
+  <div class="grid g2">
+   <div class="grid" style="gap:6px"><label class="f"><span>Equipe (busque na base)</span><input id="nft" placeholder="Clique para ver a equipe"></label><div class="row" id="nftc" style="gap:6px"></div></div>
+   <div class="grid" style="gap:6px"><label class="f"><span>Fornecedores (busque na base)</span><input id="nfs" placeholder="Clique para ver os fornecedores"></label><div class="row" id="nfsc" style="gap:6px"></div></div>
+  </div>
+  <p class="muted small" style="margin-top:-6px">Não achou alguém? ${isAdmin()?'Mande o link de cadastro em Equipe ou Fornecedores, ou cadastre':'Cadastre'} depois nas abas Equipe e Fornecedores do evento.</p>
   ${txa('Observações','notes',pre.notes||'')}
   <div class="row"><span class="sp"></span><button class="btn" type="button" data-close>Cancelar</button><button class="btn pri">Salvar evento</button></div></form>`);
- autocomplete(m.querySelector('[name=client]'),clientList,it=>{const f=m.querySelector('form');if(!f.contact.value)f.contact.value=it.obj.name;if(!f.phone.value)f.phone.value=it.obj.phone||'';if(!f.email.value)f.email.value=it.obj.email||''});
- m.querySelector('form').onsubmit=e=>{e.preventDefault();const d=formData(e.target);if(d.end&&d.start&&d.end<d.start)d.end=d.start;
+ const f=m.querySelector('form');
+ const clientHint=()=>{const v=f.client.value.trim();$('#nfch').textContent=!v?'':S.clients.some(c=>norm(c.name)===norm(v))?'Cliente da base.':'Cliente novo: será adicionado à base ao salvar.'};
+ autocomplete(f.client,clientList,it=>{if(!f.contact.value)f.contact.value=it.obj.contact||it.obj.name;if(!f.phone.value)f.phone.value=it.obj.phone||'';if(!f.email.value)f.email.value=it.obj.email||'';clientHint()},{all:true});
+ f.client.addEventListener('input',clientHint);f.client.addEventListener('blur',()=>setTimeout(clientHint,200));clientHint();
+ const drawT=()=>pickChips($('#nftc'),pickT,drawT),drawS=()=>pickChips($('#nfsc'),pickS,drawS);drawT();drawS();
+ const picker=(inp,list,arr,draw)=>autocomplete(inp,()=>list().filter(x=>!arr.some(a=>a.id===x.obj.id)),it=>{arr.push(it.obj);inp.value='';draw();setTimeout(()=>inp.blur(),0)},{all:true});
+ picker($('#nft'),teamPick,pickT,drawT);picker($('#nfs'),supPick,pickS,drawS);
+ $$('#nft,#nfs',m).forEach(i=>i.addEventListener('keydown',e=>{if(e.key==='Enter')e.preventDefault()}));
+ f.onsubmit=e=>{e.preventDefault();const d=formData(f);if(d.end&&d.start&&d.end<d.start)d.end=d.start;
+  d.team=pickT.map(p=>({id:uid(),personId:p.id,fn:'',service:''}));
+  d.suppliers=pickS.map(p=>({id:uid(),supplierId:p.id,fn:'',service:p.category||''}));
   const ev=newEvent(d);S.events.push(ev);saveEv();ensureClient(d.client);closeModal();after&&after(ev);go('evento-'+ev.id)};
 }
 
@@ -1194,15 +1218,16 @@ TAB.info=(t,ev)=>{
   ${txa('Observações','notes',ev.notes)}
   <div class="row"><a class="btn" href="${gcalURL(ev)}" target="_blank" rel="noopener">${ic('cal')} Google Agenda</a><a class="btn" href="${mapsURL(ev)}" target="_blank" rel="noopener">${ic('pin')} Abrir no Maps</a><span class="sp"></span><button class="btn pri">Salvar</button></div></form>`;
  const f=$('#inf');
- autocomplete(f.client,clientList,it=>{if(!f.contact.value)f.contact.value=it.obj.name;if(!f.phone.value)f.phone.value=it.obj.phone||'';if(!f.email.value)f.email.value=it.obj.email||''});
+ autocomplete(f.client,clientList,it=>{if(!f.contact.value)f.contact.value=it.obj.contact||it.obj.name;if(!f.phone.value)f.phone.value=it.obj.phone||'';if(!f.email.value)f.email.value=it.obj.email||''},{all:true});
  f.onsubmit=e=>{e.preventDefault();const d=formData(f);if(d.end&&d.start&&d.end<d.start)d.end=d.start;Object.assign(ev,d);ev.cc.items.forEach(i=>syncCash(ev,i));saveEv();ensureClient(d.client);toast('Informações salvas.');route()};
 };
 
 /* --- Equipe e Fornecedores --- */
-function personForm(kind,p,after){
- const isT=kind==='team',title=(p?'Editar ':'Novo ')+(isT?'colaborador':'fornecedor');p=p||{};
- const m=modal(`${mhead(title)}<form class="grid">
-  ${isT?`<div class="row" style="gap:14px"><span id="pfprev">${avatar(p,72)}</span><label class="f sp"><span>Foto (aparece ao buscar e escalar)</span><input type="file" id="pfoto" accept="image/*"></label></div>`:''}
+function personForm(kind,p,after,opt={}){
+ const isT=kind==='team',title=opt.title||(p&&p.id?'Editar ':'Novo ')+(isT?'colaborador':'fornecedor');p=p||{};
+ const pv=isT&&opt.photoBlob?`<img src="${URL.createObjectURL(opt.photoBlob)}" alt="" style="width:72px;height:72px;border-radius:50%;object-fit:cover">`:avatar(p,72);
+ const m=modal(`${mhead(title)}<form class="grid">${opt.note||''}
+  ${isT?`<div class="row" style="gap:14px"><span id="pfprev">${pv}</span><label class="f sp"><span>Foto (aparece ao buscar e escalar)</span><input type="file" id="pfoto" accept="image/*"></label></div>`:''}
   ${fld('Nome','name',p.name||'','text','required')}
   <div class="grid g2">${isT?fld('Função','role',p.role||''):fld('Categoria / serviço','category',p.category||'')}${fld('Telefone','phone',p.phone||'','tel')}</div>
   <div class="grid g2">${fld('CPF / CNPJ','doc',p.doc||'')}${fld('E-mail','email',p.email||'','email')}</div>
@@ -1211,8 +1236,9 @@ function personForm(kind,p,after){
   ${isT?`<div class="grid g2">${fld('RG','rg',p.rg||'')}<label class="f"><span>Pontuação</span>${stars(p.rating||0,'rating')}</label></div>`:`<div class="grid g2">${fld('Faixa de preço','price',p.price||'')}${fld('Operação','operation',p.operation||'','text','list="opl"')}</div><datalist id="opl"><option>ALUGUEL</option><option>VENDA</option><option>SERVIÇO</option></datalist>
   <div class="grid g2">${fld('Dados bancários','bank',p.bank||'')}<label class="f"><span>Avaliação</span>${stars(p.rating||0,'rating')}</label></div>`}
   ${txa('Observações','notes',p.notes||'')}
-  <div class="row"><span class="sp"></span><button class="btn" type="button" data-close>Cancelar</button><button class="btn pri">Salvar</button></div></form>`);
- let newPhoto=null;
+  <div class="row"><span class="sp"></span><button class="btn" type="button" ${opt.onCancel?'data-pfc':'data-close'}>${opt.onCancel?'Voltar':'Cancelar'}</button><button class="btn pri">${esc(opt.ok||'Salvar')}</button></div></form>`);
+ if(opt.onCancel)m.querySelector('[data-pfc]').onclick=opt.onCancel;
+ let newPhoto=isT&&opt.photoBlob||null;
  const fi=m.querySelector('#pfoto');if(fi)fi.onchange=()=>{newPhoto=fi.files[0];if(newPhoto){const u=URL.createObjectURL(newPhoto);$('#pfprev').innerHTML=`<img src="${u}" alt="" style="width:72px;height:72px;border-radius:50%;object-fit:cover">`}};
  m.querySelector('form').onsubmit=async e=>{e.preventDefault();const d=formData(e.target);if(d.rating!==undefined)d.rating=+d.rating;const key=isT?'team':'suppliers';
   if(newPhoto){if(p.photo){Store.delFile(p.photo);delete urlCache[p.photo]}d.photo=await Store.putFile(newPhoto);await fileURL(d.photo)}
@@ -1227,7 +1253,7 @@ function eventPeople(t,ev,redraw,kind){
   ${arr.map(a=>{const p=find(a[k])||{name:'(removido do cadastro)'};return `<tr data-id="${a.id}"><td><div class="row" style="gap:10px;flex-wrap:nowrap">${isT?avatar(p,40):''}<b>${esc(p.name)}</b></div></td><td><input data-fn="${a.id}" value="${esc(isT?a.fn:a.service)}" style="min-height:36px;padding:6px 8px" aria-label="${lbl}"></td><td class="nw">${esc(p.phone||'')}</td><td>${esc(isT?p.pix||'':p.email||'')}</td>${isT?'':`<td>${stars(p.rating||0)}</td>`}<td class="num"><button class="ib" data-pe="${a.id}" aria-label="Editar">${ic('edit')}</button><button class="ib" data-pr="${a.id}" aria-label="Remover do evento">${ic('trash')}</button></td></tr>`}).join('')}
   </tbody></table></div>`:`<div class="empty">Ninguém adicionado ainda. Busque no cadastro ou cadastre alguém novo.</div>`}</div>`;
  const add=p=>{if(arr.some(a=>a[k]===p.id)){toast('Já está no evento.');return}arr.push({id:uid(),[k]:p.id,fn:'',service:isT?'':(p.category||'')});saveEv();redraw()};
- autocomplete($('#padd'),()=>reg.map(p=>({label:p.name,sub:isT?p.role:p.category,obj:p,pre:isT?avatar(p,32):''})),it=>add(it.obj));
+ autocomplete($('#padd'),()=>reg.filter(p=>!arr.some(a=>a[k]===p.id)).map(p=>({label:p.name,sub:isT?p.role:p.category,obj:p,pre:isT?avatar(p,32):''})),it=>add(it.obj),{all:true});
  $('#pnew').onclick=()=>personForm(kind,null,p=>add(p));
  $$('[data-fn]',t).forEach(i=>i.onchange=()=>{const a=arr.find(x=>x.id===i.dataset.fn);if(isT)a.fn=i.value;else a.service=i.value;saveEv()});
  $$('[data-pe]',t).forEach(b=>b.onclick=()=>{const a=arr.find(x=>x.id===b.dataset.pe);const p=find(a[k]);if(p)personForm(kind,p,redraw)});
@@ -1282,20 +1308,36 @@ TAB.timeline=(t,ev,redraw)=>{
 };
 
 /* --- Resumo --- */
-async function resumoHTML(ev,withPhotos=true){
+/* organograma desenhado como imagem fixa (cabe na tela e na impressão) */
+function orgStaticHTML(ev){
+ const N=(ev.org&&ev.org.nodes)||[];if(!N.length)return '';
+ const W=190,lines=(t,n)=>Math.max(1,Math.ceil(String(t||'').length/n));
+ const hOf=n=>Math.max(38,16+18*lines(n.title,17))+Math.max(28,12+15*lines(n.sub,24));
+ const x0=Math.min(...N.map(n=>n.x))-12,y0=Math.min(...N.map(n=>n.y))-12;
+ const B={};N.forEach(n=>B[n.id]={x:n.x-x0,y:n.y-y0,w:W,h:hOf(n)});
+ const Wt=Math.max(...Object.values(B).map(b=>b.x+b.w))+12,Ht=Math.max(...Object.values(B).map(b=>b.y+b.h))+12;
+ const clip=(b,tx,ty)=>{const cx=b.x+b.w/2,cy=b.y+b.h/2,dx=tx-cx,dy=ty-cy;if(!dx&&!dy)return {x:cx,y:cy};const k=Math.min(Math.abs((b.w/2+4)/(dx||1e-9)),Math.abs((b.h/2+4)/(dy||1e-9)));return {x:cx+dx*k,y:cy+dy*k}};
+ const edges=(ev.org.edges||[]).map(e=>{const a=B[e.from],b=B[e.to];if(!a||!b)return '';const p=clip(a,b.x+b.w/2,b.y+b.h/2),q=clip(b,a.x+a.w/2,a.y+a.h/2);return `<line x1="${p.x}" y1="${p.y}" x2="${q.x}" y2="${q.y}" stroke="#1C1713" stroke-width="2" marker-end="url(#rah)"/>`}).join('');
+ const pc='-webkit-print-color-adjust:exact;print-color-adjust:exact;';
+ const nodes=N.map(n=>{const b=B[n.id],c=n.color||'#1C1713',lt=['#E8B21F'].includes(c);return `<div style="position:absolute;left:${b.x}px;top:${b.y}px;width:${W}px;border:2px solid ${c};border-radius:10px;background:#fff;overflow:hidden;box-sizing:border-box;${pc}"><div style="padding:9px 10px 7px;font-weight:800;font-size:14px;line-height:1.25;text-align:center;overflow-wrap:anywhere">${esc(n.title)}</div><div style="padding:6px 10px;background:${c};color:${lt?'#1C1713':'#fff'};font-size:12px;line-height:1.3;text-align:center;min-height:16px;overflow-wrap:anywhere;${pc}">${esc(n.sub||'')}</div></div>`}).join('');
+ const z=Math.min(1,700/Wt);
+ return `<h2>Organograma</h2><div style="overflow-x:auto"><div style="position:relative;width:${Wt}px;height:${Ht}px;zoom:${z};page-break-inside:avoid"><svg width="${Wt}" height="${Ht}" style="position:absolute;inset:0;overflow:visible"><defs><marker id="rah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#1C1713"/></marker></defs>${edges}</svg>${nodes}</div></div>`;
+}
+async function resumoHTML(ev,withPhotos=true,links=false){
  const P=id=>S.team.find(t=>t.id===id)||{},F=id=>S.suppliers.find(t=>t.id===id)||{};
  let photos='';if(withPhotos&&ev.photos.length){const urls=await Promise.all(ev.photos.map(async p=>{const b=await Store.getFile(p.fileId);if(!b)return '';return await new Promise(r=>{const fr=new FileReader();fr.onload=()=>r(fr.result);fr.readAsDataURL(b)})}));photos=`<h2>Fotos</h2><div class="ph">${ev.photos.map((p,i)=>urls[i]?`<figure style="margin:0"><img src="${urls[i]}" alt=""><figcaption>${esc(p.caption||'')}</figcaption></figure>`:'').join('')}</div>`}
+ let docs='';if(ev.docs.length){const urls=links?await Promise.all(ev.docs.map(d=>fileURL(d.fileId))):[];docs=`<h2>Documentos</h2><table><thead><tr><th>Arquivo</th><th class="num">Tamanho</th></tr></thead><tbody>${ev.docs.map((d,i)=>`<tr><td>${urls[i]?`<a href="${urls[i]}" target="_blank" rel="noopener" style="color:#B04716;font-weight:700">${esc(d.name)}</a>`:esc(d.name)}</td><td class="num">${d.size?(d.size/1024).toFixed(0)+' KB':''}</td></tr>`).join('')}</tbody></table>`}
  return `<h1>${esc(ev.name)}</h1><p class="muted">${esc(ev.status)} · ${fdate(ev.start)}${ev.startTime?' '+ev.startTime:''}${ev.end&&ev.end!==ev.start?' a '+fdate(ev.end):''} · ${esc(ev.local||'')} ${esc(ev.address||'')}</p>
  <h2>Cliente</h2><p><b>${esc(ev.client||'—')}</b><br>Contato: ${esc(ev.contact||'—')} · ${esc(ev.phone||'')} · ${esc(ev.email||'')}</p>
  <h2>Equipe</h2>${ev.team.length?`<table><thead><tr><th>Nome</th><th>Função</th><th>Telefone</th><th>PIX</th></tr></thead><tbody>${ev.team.map(a=>`<tr><td>${esc(P(a.personId).name||'')}</td><td>${esc(a.fn||P(a.personId).role||'')}</td><td>${esc(P(a.personId).phone||'')}</td><td>${esc(P(a.personId).pix||'')}</td></tr>`).join('')}</tbody></table>`:'<p class="muted">—</p>'}
  <h2>Fornecedores</h2>${ev.suppliers.length?`<table><thead><tr><th>Fornecedor</th><th>Serviço</th><th>Contato</th><th>Telefone</th><th>E-mail</th></tr></thead><tbody>${ev.suppliers.map(a=>`<tr><td>${esc(F(a.supplierId).name||'')}</td><td>${esc(a.service||'')}</td><td>${esc(F(a.supplierId).contact||'')}</td><td>${esc(F(a.supplierId).phone||'')}</td><td>${esc(F(a.supplierId).email||'')}</td></tr>`).join('')}</tbody></table>`:'<p class="muted">—</p>'}
  ${ev.timeline.length?`<h2>Linha do tempo do dia</h2><table><tbody>${ev.timeline.map(s=>`<tr><td style="width:80px"><b>${esc(s.time)}</b></td><td>${esc(s.text)}</td><td>${esc(s.who||'')}</td></tr>`).join('')}</tbody></table>`:''}
- ${ev.notes?`<h2>Observações</h2><p>${esc(ev.notes).replace(/\n/g,'<br>')}</p>`:''}${photos}`;
+ ${ev.notes?`<h2>Observações</h2><p>${esc(ev.notes).replace(/\n/g,'<br>')}</p>`:''}${orgStaticHTML(ev)}${docs}${photos}`;
 }
 TAB.resumo=async(t,ev)=>{
- t.innerHTML=`<div class="row noprint"><p class="muted">Página pronta para imprimir. Não mostra valores financeiros.</p><span class="sp"></span><button class="btn pri" id="rp">${ic('print')} Imprimir</button></div><div class="card" id="rs">Carregando…</div>`;
- const h=await resumoHTML(ev);$('#rs').innerHTML=`<div class="prose" style="max-width:none">${h}</div>`;
- $('#rp').onclick=()=>printHTML('Resumo '+ev.name,h);
+ t.innerHTML=`<div class="row noprint"><p class="muted">Página pronta para imprimir, com organograma, documentos e fotos. Não mostra valores financeiros.</p><span class="sp"></span><button class="btn pri" id="rp">${ic('print')} Imprimir</button></div><div class="card" id="rs">Carregando…</div>`;
+ const [h,hp]=await Promise.all([resumoHTML(ev,true,true),resumoHTML(ev)]);if(!$('#rs'))return;$('#rs').innerHTML=`<div class="prose" style="max-width:none">${h}</div>`;
+ $('#rp').onclick=()=>printHTML('Resumo '+ev.name,hp);
 };
 
 /* --- Financeiro / Centro de Custo (Administrador) --- */
@@ -1518,6 +1560,31 @@ TAB.org=(t,ev,redrawTab)=>{
 };
 
 /* ================= Agenda ================= */
+/* link secreto para assinar a agenda no Google Agenda (só eventos ativos, sem valores) */
+async function calFeedToken(renew){
+ const uidMe=ME.id;
+ if(renew){const d=await sb.from('calendar_feeds').delete().eq('user_id',uidMe);if(d.error)throw d.error}
+ let r=await sb.from('calendar_feeds').select('token').eq('user_id',uidMe).maybeSingle();
+ if(r.error)throw r.error;
+ if(r.data)return r.data.token;
+ r=await sb.from('calendar_feeds').insert({user_id:uidMe}).select('token').single();
+ if(r.error)throw r.error;
+ return r.data.token;
+}
+async function calFeed(renew=false){
+ const m=modal(`${mhead('Assinar no Google Agenda')}<div class="grid" id="gfb"><p class="muted">Gerando o seu link…</p></div>`);
+ let tk;try{tk=await calFeedToken(renew)}catch(e){$('#gfb').innerHTML='<p>Não foi possível gerar o link: '+esc(e.message||'')+'</p>';return}
+ const url=SB_URL+'/functions/v1/agenda?t='+tk;
+ $('#gfb').innerHTML=`<p>Com este link, os eventos do sistema aparecem sozinhos no seu Google Agenda, numa agenda separada chamada <b>GR Events</b>. Entram só os eventos ativos (os cancelados ficam de fora) e nenhum valor financeiro.</p>
+ <label class="f"><span>Seu link pessoal</span><input id="gfu" readonly value="${esc(url)}"></label>
+ <div class="row"><button class="btn pri" id="gfc">${ic('copy')} Copiar link</button><a class="btn" href="https://calendar.google.com/calendar/u/0/r/settings/addbyurl" target="_blank" rel="noopener">${ic('cal')} Abrir o Google Agenda</a></div>
+ <ol class="small" style="margin:0;padding-left:18px;line-height:1.7"><li>Clique em <b>Copiar link</b>.</li><li>Clique em <b>Abrir o Google Agenda</b> (abre direto em "Adicionar agenda → Do URL").</li><li>Cole o link e clique em <b>Adicionar agenda</b>.</li></ol>
+ <p class="muted small">O Google busca as atualizações sozinho, mas pode levar algumas horas para mostrar mudanças. O que for alterado no Google não volta para o sistema. Não compartilhe este link: quem tiver ele vê a agenda.</p>
+ <div class="row"><button class="btn sm ghost" id="gfr">Gerar novo link</button><span class="sp"></span><button class="btn" type="button" data-close>Fechar</button></div>`;
+ $('#gfu').onclick=e=>e.target.select();
+ $('#gfc').onclick=async()=>{try{await navigator.clipboard.writeText(url);toast('Link copiado.')}catch(e){$('#gfu').select();toast('Selecione e copie o link.')}};
+ $('#gfr').onclick=()=>{if(confirm('Gerar um novo link desativa o atual. Quem assinou com o link antigo para de receber os eventos e precisa assinar de novo. Continuar?'))calFeed(true)};
+}
 let calY=new Date().getFullYear(),calM=new Date().getMonth();
 VIEWS.agenda=v=>{
  const first=new Date(calY,calM,1),startDow=first.getDay(),days=new Date(calY,calM+1,0).getDate(),t=today();
@@ -1525,7 +1592,7 @@ VIEWS.agenda=v=>{
  const iso=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
  const all=S.events.slice().sort((a,b)=>(a.start||'9999').localeCompare(b.start||'9999'));
  const rows=Math.ceil((startDow+days)/7)*7;
- v.innerHTML=`<div class="row"><h1>Agenda</h1><span class="sp"></span><button class="btn pri" id="ne">${ic('plus')} Novo Evento</button></div>
+ v.innerHTML=`<div class="row"><h1>Agenda</h1><span class="sp"></span><button class="btn" id="gsub">${ic('cal')} Assinar no Google Agenda</button><button class="btn pri" id="ne">${ic('plus')} Novo Evento</button></div>
  <div class="row"><button class="ib" id="cp" aria-label="Mês anterior">${ic('left')}</button><h2 style="min-width:200px;text-align:center">${MES[calM]} ${calY}</h2><button class="ib" id="cn" aria-label="Próximo mês">${ic('right')}</button><button class="btn sm" id="ct">Hoje</button></div>
  <div class="cal">${['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map(d=>`<div class="dh">${d}</div>`).join('')}
  ${cells.slice(0,rows).map(d=>{const k=iso(d),evs=S.events.filter(e=>e.start===k);return `<div class="d ${d.getMonth()!==calM?'out':''} ${k===t?'today':''}"><span class="n">${d.getDate()}</span>${evs.map(e=>`<button class="chip" data-ev="${e.id}" title="${esc(e.name)}">${esc(e.name)}</button>`).join('')}</div>`}).join('')}</div>
@@ -1534,6 +1601,7 @@ VIEWS.agenda=v=>{
  $('#cp').onclick=()=>{calM--;if(calM<0){calM=11;calY--}VIEWS.agenda(v)};
  $('#cn').onclick=()=>{calM++;if(calM>11){calM=0;calY++}VIEWS.agenda(v)};
  $('#ct').onclick=()=>{calY=new Date().getFullYear();calM=new Date().getMonth();VIEWS.agenda(v)};
+ $('#gsub').onclick=()=>calFeed();
  $('#ne').onclick=()=>eventForm();
  $$('[data-ev]',v).forEach(b=>b.onclick=()=>go('evento-'+b.dataset.ev));
 };
@@ -1878,6 +1946,75 @@ function recForm(t){
   save('cash');save('recurring');const n=runRecurring();toast('Recorrente salvo.'+(n?` ${n} lançamento(s) criados.`:''));route();recurringManager()};
 }
 
+/* ================= Cadastro por link (Equipe e Fornecedores) ================= */
+/* O fornecedor ou colaborador preenche cadastro.html; o pedido fica pendente até o Administrador aprovar e dar a nota. */
+let PENDING=[];
+const SIGNUP_KIND={team:'Equipe',suppliers:'Fornecedores'};
+async function loadPending(){
+ if(!isAdmin()||!sb){PENDING=[];return}
+ const r=await sb.from('signup_requests').select('id,kind,data,photo,created_at').eq('status','pendente').order('created_at');
+ if(!r.error)PENDING=r.data||[];
+}
+const pendingOf=kind=>PENDING.filter(p=>p.kind===kind);
+function signupBase(){return /^https?:$/.test(location.protocol)?new URL('cadastro.html',location.href).href.split('?')[0].split('#')[0]:'https://lrrdac-create.github.io/gr-eventos-sistem/cadastro.html'}
+async function signupToken(kind,renew){
+ if(renew){const r=await sb.from('signup_links').upsert({kind,token:crypto.randomUUID(),created_at:new Date().toISOString()}).select('token').single();if(r.error)throw r.error;return r.data.token}
+ let r=await sb.from('signup_links').select('token').eq('kind',kind).maybeSingle();
+ if(r.error)throw r.error;if(r.data)return r.data.token;
+ r=await sb.from('signup_links').insert({kind}).select('token').single();if(r.error)throw r.error;return r.data.token;
+}
+async function signupLinkDialog(kind,renew=false){
+ const who=kind==='team'?'colaborador':'fornecedor';
+ modal(`${mhead('Link de cadastro · '+SIGNUP_KIND[kind])}<div class="grid" id="sgb"><p class="muted">Gerando o link…</p></div>`);
+ let tk;try{tk=await signupToken(kind,renew)}catch(e){$('#sgb').innerHTML='<p>Não foi possível gerar o link: '+esc(e.message||'')+'</p>';return}
+ const url=signupBase()+'?t='+tk;
+ const msg=`Olá! Para entrar na base de ${kind==='team'?'equipe':'fornecedores'} da GR Events, preencha seus dados neste link: ${url}`;
+ $('#sgb').innerHTML=`<p>Mande este link para o ${who}. Ele preenche os dados (${kind==='team'?'com foto, CPF e PIX':'com CNPJ, serviço e contato'}) e o cadastro chega aqui como <b>aguardando aprovação</b>. Você confere, dá a nota e confirma.</p>
+ <label class="f"><span>Link de cadastro de ${SIGNUP_KIND[kind].toLowerCase()}</span><input id="sgu" readonly value="${esc(url)}"></label>
+ <div class="row"><button class="btn pri" id="sgc">${ic('copy')} Copiar link</button><a class="btn" href="https://wa.me/?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">${ic('chat')} Enviar pelo WhatsApp</a></div>
+ <p class="muted small">É o mesmo link para todos os ${kind==='team'?'colaboradores':'fornecedores'}. Se ele cair em mãos erradas, gere um novo: o antigo para de funcionar.</p>
+ <div class="row"><button class="btn sm ghost" id="sgr">Gerar novo link</button><span class="sp"></span><button class="btn" type="button" data-close>Fechar</button></div>`;
+ $('#sgu').onclick=e=>e.target.select();
+ $('#sgc').onclick=async()=>{try{await navigator.clipboard.writeText(url);toast('Link copiado.')}catch(e){$('#sgu').select();toast('Selecione e copie o link.')}};
+ $('#sgr').onclick=()=>{if(confirm('Gerar um novo link desativa o atual. Quem ainda não preencheu vai precisar do link novo. Continuar?'))signupLinkDialog(kind,true)};
+}
+const digits=s=>String(s||'').replace(/\D/g,'');
+function signupMatch(req){
+ const L=S[req.kind],d=req.data,doc=digits(d.doc);
+ return L.find(x=>doc.length>=11&&digits(x.doc)===doc)||L.find(x=>norm(x.name)===norm(d.name))||null;
+}
+async function setSignupStatus(req,status){
+ const r=await sb.from('signup_requests').update({status,reviewed_at:new Date().toISOString(),reviewed_by:ME.id,photo:null}).eq('id',req.id);
+ if(r.error){toast('Não foi possível atualizar o pedido: '+(r.error.message||''));return false}
+ PENDING=PENDING.filter(p=>p.id!==req.id);return true;
+}
+function pendingDialog(kind){
+ const L=pendingOf(kind);
+ if(!L.length){closeModal();route();return}
+ const m=modal(`${mhead('Cadastros aguardando aprovação · '+SIGNUP_KIND[kind])}
+ <p class="muted small">Confira os dados, dê a nota e aprove. O cadastro só entra na base depois de aprovado.</p>
+ <div class="grid" style="gap:8px">${L.map(r=>{const d=r.data,ex=signupMatch(r);return `<div class="li" data-id="${r.id}" style="align-items:center">
+  ${r.photo?`<img src="${esc(r.photo)}" alt="" style="width:44px;height:44px;border-radius:50%;object-fit:cover;flex:none">`:`<span class="av" style="width:44px;height:44px">${esc(initials(d.name))}</span>`}
+  <span class="sp" style="min-width:0"><b>${esc(d.name)}</b> <span class="muted small">· ${esc((kind==='team'?d.role:d.category)||'')}</span><br><span class="muted small">${esc([d.phone,d.doc,[d.city,d.state].filter(Boolean).join('/')].filter(Boolean).join(' · '))} · enviado em ${new Date(r.created_at).toLocaleDateString('pt-BR')}</span>${ex?`<br><span class="small" style="color:var(--warn)">Parecido com "${esc(ex.name)}", que já está no cadastro: ao aprovar, os dados dele são atualizados.</span>`:''}</span>
+  <button class="btn sm pri" data-ok>${ic('check')} Conferir e aprovar</button><button class="btn sm" data-no>Recusar</button></div>`}).join('')}</div>
+ <div class="row"><button class="btn sm ghost" id="pdl">${ic('copy')} Link de cadastro</button><span class="sp"></span><button class="btn" type="button" data-close>Fechar</button></div>`,{wide:true});
+ const req=el=>L.find(x=>x.id===el.closest('[data-id]').dataset.id);
+ $('#pdl').onclick=()=>signupLinkDialog(kind);
+ $$('[data-no]',m).forEach(b=>b.onclick=async()=>{const r=req(b);if(!await ask(`Recusar o cadastro de "${r.data.name}"? Ele não entra na base.`,{ok:'Recusar'})){pendingDialog(kind);return}if(await setSignupStatus(r,'recusado'))toast('Cadastro recusado.');pendingDialog(kind)});
+ $$('[data-ok]',m).forEach(b=>b.onclick=()=>approveSignup(req(b)));
+}
+async function approveSignup(req){
+ const kind=req.kind,ex=signupMatch(req);
+ const p=ex?{...ex,...req.data,notes:[ex.notes,req.data.notes].filter(Boolean).join('\n')}:{...req.data};
+ let photoBlob=null;if(req.photo){try{photoBlob=await (await fetch(req.photo)).blob()}catch(e){}}
+ personForm(kind,p,async saved=>{
+  if(await setSignupStatus(req,'aprovado'))toast(`${saved.name} entrou no cadastro de ${SIGNUP_KIND[kind]}.`);
+  if(pendingOf(kind).length)pendingDialog(kind);else route();
+ },{title:'Aprovar cadastro'+(kind==='team'?' de colaborador':' de fornecedor'),ok:'Aprovar e salvar',photoBlob,
+  note:`<p class="small" style="background:var(--warnl);padding:10px 12px;border-radius:10px;margin:0">${ex?`Já existe <b>${esc(ex.name)}</b> no cadastro: ao aprovar, ele é atualizado com estes dados.`:'Cadastro enviado pelo link.'} Confira os dados e dê a <b>nota</b> antes de aprovar.</p>`,
+  onCancel:()=>pendingDialog(kind)});
+}
+
 /* ================= Clientes, Fornecedores, Equipe ================= */
 const regQ={},regSel={};
 function clientForm(c,after){c=c||{};const m=modal(`${mhead(c.id?'Editar cliente':'Novo cliente')}<form class="grid">
@@ -1895,11 +2032,14 @@ function registry(v,key){
   team:{t:'Equipe',cols:['Nome','Função','Telefone','PIX','Dados bancários'],row:c=>[`<div class="row" style="gap:10px;flex-wrap:nowrap">${avatar(c,40)}<b>${esc(c.name)}</b></div>`,esc(c.role||''),`<span class="nw">${esc(c.phone||'')}</span>`,esc(c.pix||''),esc(c.bank||'')],form:c=>personForm('team',c,route)}}[key];
  const sel=regSel[key]=regSel[key]||new Set();[...sel].forEach(id=>{if(!S[key].some(x=>x.id===id))sel.delete(id)});
  const q=norm(regQ[key]||'');let L=S[key].slice().sort((a,b)=>a.name.localeCompare(b.name,'pt-BR'));if(q)L=L.filter(c=>norm(Object.values(c).join(' ')).includes(q));
- v.innerHTML=`<div class="row"><h1>${cfg.t}</h1><span class="tag">${S[key].length}</span><span class="sp"></span>${isAdmin()?`<button class="btn danger" id="rcl">${ic('trash')} Apagar cadastros</button>`:''}<button class="btn pri" id="rn">${ic('plus')} Adicionar</button></div>
+ v.innerHTML=`<div class="row"><h1>${cfg.t}</h1><span class="tag">${S[key].length}</span><span class="sp"></span>${isAdmin()?`<button class="btn danger" id="rcl">${ic('trash')} Apagar cadastros</button>`:''}${isAdmin()&&key!=='clients'?`<button class="btn" id="rlk">${ic('copy')} Link de cadastro</button>`:''}<button class="btn pri" id="rn">${ic('plus')} Adicionar</button></div>
+ ${isAdmin()&&key!=='clients'&&pendingOf(key).length?`<button class="card row" id="rpend" style="border:2px solid var(--or);background:var(--orl);cursor:pointer;text-align:left;font:inherit;color:inherit;width:100%"><span class="badge" style="margin:0;font-size:13px;padding:2px 9px">${pendingOf(key).length}</span><b>${pendingOf(key).length===1?'1 cadastro enviado pelo link aguarda':pendingOf(key).length+' cadastros enviados pelo link aguardam'} a sua aprovação</b><span class="sp"></span><span class="btn sm pri">Conferir</span></button>`:''}
  <label style="max-width:420px"><input id="rq" type="search" placeholder="Buscar" value="${esc(regQ[key]||'')}" aria-label="Buscar"></label>
  <div class="row" id="selbar"><label class="row" style="gap:8px;font-weight:700;cursor:pointer"><input type="checkbox" id="rall" ${L.length&&L.every(c=>sel.has(c.id))?'checked':''} aria-label="Selecionar todos"> Selecionar todos${q?' (da busca)':''}</label><span class="muted small">${sel.size?sel.size+' selecionado(s)':''}</span><span class="sp"></span>${sel.size?`<button class="btn sm" id="rnone">Limpar seleção</button><button class="btn sm dark" id="rdel">${ic('trash')} Apagar selecionados (${sel.size})</button>`:''}</div>
  <div class="card scroll">${L.length?`<table class="stack"><thead><tr><th style="width:36px"></th>${cfg.cols.map(c=>`<th>${c}</th>`).join('')}<th></th></tr></thead><tbody>${L.map(c=>`<tr data-id="${c.id}" style="${sel.has(c.id)?'background:#FBF1E8':''}"><td><input type="checkbox" data-sel ${sel.has(c.id)?'checked':''} aria-label="Selecionar ${esc(c.name)}"></td>${cfg.row(c).map(x=>`<td>${x}</td>`).join('')}<td class="num nw"><button class="ib" data-ed aria-label="Editar">${ic('edit')}</button><button class="ib" data-rm aria-label="Excluir">${ic('trash')}</button></td></tr>`).join('')}</tbody></table>`:`<div class="empty">${q?'Nada encontrado.':'Cadastro vazio. Clique em Adicionar.'}</div>`}</div>`;
  $('#rn').onclick=()=>cfg.form(null);
+ if($('#rlk'))$('#rlk').onclick=()=>signupLinkDialog(key);
+ if($('#rpend'))$('#rpend').onclick=()=>pendingDialog(key);
  const keepScroll=()=>{const y=scrollY;registry(v,key);scrollTo(0,y)};
  $$('[data-sel]',v).forEach(c=>c.onchange=()=>{const id=c.closest('tr').dataset.id;c.checked?sel.add(id):sel.delete(id);keepScroll()});
  if($('#rall'))$('#rall').onchange=e=>{L.forEach(c=>e.target.checked?sel.add(c.id):sel.delete(c.id));keepScroll()};
@@ -2098,6 +2238,7 @@ async function startSession(){
  migrate();
  if(isAdmin()){try{runRecurring()}catch(e){}}
  await preloadPhotos();
+ try{await loadPending()}catch(e){}
  route();
 }
 (async()=>{

@@ -18,3 +18,9 @@ Depois de alterar qualquer um deles, rode:
 ```
 
 Isso gera o `index.html`, que é o arquivo publicado.
+
+## Agenda no Google Agenda
+Na tela **Agenda**, o botão "Assinar no Google Agenda" gera um link pessoal e secreto.
+O link é servido pela função `supabase/functions/agenda` (publicada no Supabase com
+`verify_jwt = false`; o acesso é controlado pelo token da tabela `calendar_feeds`).
+Mostra só eventos não cancelados e nenhum valor financeiro.

@@ -1,5 +1,30 @@
 
 /* ================= Agenda ================= */
+/* link secreto para assinar a agenda no Google Agenda (só eventos ativos, sem valores) */
+async function calFeedToken(renew){
+ const uidMe=ME.id;
+ if(renew){const d=await sb.from('calendar_feeds').delete().eq('user_id',uidMe);if(d.error)throw d.error}
+ let r=await sb.from('calendar_feeds').select('token').eq('user_id',uidMe).maybeSingle();
+ if(r.error)throw r.error;
+ if(r.data)return r.data.token;
+ r=await sb.from('calendar_feeds').insert({user_id:uidMe}).select('token').single();
+ if(r.error)throw r.error;
+ return r.data.token;
+}
+async function calFeed(renew=false){
+ const m=modal(`${mhead('Assinar no Google Agenda')}<div class="grid" id="gfb"><p class="muted">Gerando o seu link…</p></div>`);
+ let tk;try{tk=await calFeedToken(renew)}catch(e){$('#gfb').innerHTML='<p>Não foi possível gerar o link: '+esc(e.message||'')+'</p>';return}
+ const url=SB_URL+'/functions/v1/agenda?t='+tk;
+ $('#gfb').innerHTML=`<p>Com este link, os eventos do sistema aparecem sozinhos no seu Google Agenda, numa agenda separada chamada <b>GR Events</b>. Entram só os eventos ativos (os cancelados ficam de fora) e nenhum valor financeiro.</p>
+ <label class="f"><span>Seu link pessoal</span><input id="gfu" readonly value="${esc(url)}"></label>
+ <div class="row"><button class="btn pri" id="gfc">${ic('copy')} Copiar link</button><a class="btn" href="https://calendar.google.com/calendar/u/0/r/settings/addbyurl" target="_blank" rel="noopener">${ic('cal')} Abrir o Google Agenda</a></div>
+ <ol class="small" style="margin:0;padding-left:18px;line-height:1.7"><li>Clique em <b>Copiar link</b>.</li><li>Clique em <b>Abrir o Google Agenda</b> (abre direto em "Adicionar agenda → Do URL").</li><li>Cole o link e clique em <b>Adicionar agenda</b>.</li></ol>
+ <p class="muted small">O Google busca as atualizações sozinho, mas pode levar algumas horas para mostrar mudanças. O que for alterado no Google não volta para o sistema. Não compartilhe este link: quem tiver ele vê a agenda.</p>
+ <div class="row"><button class="btn sm ghost" id="gfr">Gerar novo link</button><span class="sp"></span><button class="btn" type="button" data-close>Fechar</button></div>`;
+ $('#gfu').onclick=e=>e.target.select();
+ $('#gfc').onclick=async()=>{try{await navigator.clipboard.writeText(url);toast('Link copiado.')}catch(e){$('#gfu').select();toast('Selecione e copie o link.')}};
+ $('#gfr').onclick=()=>{if(confirm('Gerar um novo link desativa o atual. Quem assinou com o link antigo para de receber os eventos e precisa assinar de novo. Continuar?'))calFeed(true)};
+}
 let calY=new Date().getFullYear(),calM=new Date().getMonth();
 VIEWS.agenda=v=>{
  const first=new Date(calY,calM,1),startDow=first.getDay(),days=new Date(calY,calM+1,0).getDate(),t=today();
@@ -7,7 +32,7 @@ VIEWS.agenda=v=>{
  const iso=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
  const all=S.events.slice().sort((a,b)=>(a.start||'9999').localeCompare(b.start||'9999'));
  const rows=Math.ceil((startDow+days)/7)*7;
- v.innerHTML=`<div class="row"><h1>Agenda</h1><span class="sp"></span><button class="btn pri" id="ne">${ic('plus')} Novo Evento</button></div>
+ v.innerHTML=`<div class="row"><h1>Agenda</h1><span class="sp"></span><button class="btn" id="gsub">${ic('cal')} Assinar no Google Agenda</button><button class="btn pri" id="ne">${ic('plus')} Novo Evento</button></div>
  <div class="row"><button class="ib" id="cp" aria-label="Mês anterior">${ic('left')}</button><h2 style="min-width:200px;text-align:center">${MES[calM]} ${calY}</h2><button class="ib" id="cn" aria-label="Próximo mês">${ic('right')}</button><button class="btn sm" id="ct">Hoje</button></div>
  <div class="cal">${['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map(d=>`<div class="dh">${d}</div>`).join('')}
  ${cells.slice(0,rows).map(d=>{const k=iso(d),evs=S.events.filter(e=>e.start===k);return `<div class="d ${d.getMonth()!==calM?'out':''} ${k===t?'today':''}"><span class="n">${d.getDate()}</span>${evs.map(e=>`<button class="chip" data-ev="${e.id}" title="${esc(e.name)}">${esc(e.name)}</button>`).join('')}</div>`}).join('')}</div>
@@ -16,6 +41,7 @@ VIEWS.agenda=v=>{
  $('#cp').onclick=()=>{calM--;if(calM<0){calM=11;calY--}VIEWS.agenda(v)};
  $('#cn').onclick=()=>{calM++;if(calM>11){calM=0;calY++}VIEWS.agenda(v)};
  $('#ct').onclick=()=>{calY=new Date().getFullYear();calM=new Date().getMonth();VIEWS.agenda(v)};
+ $('#gsub').onclick=()=>calFeed();
  $('#ne').onclick=()=>eventForm();
  $$('[data-ev]',v).forEach(b=>b.onclick=()=>go('evento-'+b.dataset.ev));
 };

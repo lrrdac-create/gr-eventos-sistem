@@ -16,11 +16,14 @@ function registry(v,key){
   team:{t:'Equipe',cols:['Nome','Função','Telefone','PIX','Dados bancários'],row:c=>[`<div class="row" style="gap:10px;flex-wrap:nowrap">${avatar(c,40)}<b>${esc(c.name)}</b></div>`,esc(c.role||''),`<span class="nw">${esc(c.phone||'')}</span>`,esc(c.pix||''),esc(c.bank||'')],form:c=>personForm('team',c,route)}}[key];
  const sel=regSel[key]=regSel[key]||new Set();[...sel].forEach(id=>{if(!S[key].some(x=>x.id===id))sel.delete(id)});
  const q=norm(regQ[key]||'');let L=S[key].slice().sort((a,b)=>a.name.localeCompare(b.name,'pt-BR'));if(q)L=L.filter(c=>norm(Object.values(c).join(' ')).includes(q));
- v.innerHTML=`<div class="row"><h1>${cfg.t}</h1><span class="tag">${S[key].length}</span><span class="sp"></span>${isAdmin()?`<button class="btn danger" id="rcl">${ic('trash')} Apagar cadastros</button>`:''}<button class="btn pri" id="rn">${ic('plus')} Adicionar</button></div>
+ v.innerHTML=`<div class="row"><h1>${cfg.t}</h1><span class="tag">${S[key].length}</span><span class="sp"></span>${isAdmin()?`<button class="btn danger" id="rcl">${ic('trash')} Apagar cadastros</button>`:''}${isAdmin()&&key!=='clients'?`<button class="btn" id="rlk">${ic('copy')} Link de cadastro</button>`:''}<button class="btn pri" id="rn">${ic('plus')} Adicionar</button></div>
+ ${isAdmin()&&key!=='clients'&&pendingOf(key).length?`<button class="card row" id="rpend" style="border:2px solid var(--or);background:var(--orl);cursor:pointer;text-align:left;font:inherit;color:inherit;width:100%"><span class="badge" style="margin:0;font-size:13px;padding:2px 9px">${pendingOf(key).length}</span><b>${pendingOf(key).length===1?'1 cadastro enviado pelo link aguarda':pendingOf(key).length+' cadastros enviados pelo link aguardam'} a sua aprovação</b><span class="sp"></span><span class="btn sm pri">Conferir</span></button>`:''}
  <label style="max-width:420px"><input id="rq" type="search" placeholder="Buscar" value="${esc(regQ[key]||'')}" aria-label="Buscar"></label>
  <div class="row" id="selbar"><label class="row" style="gap:8px;font-weight:700;cursor:pointer"><input type="checkbox" id="rall" ${L.length&&L.every(c=>sel.has(c.id))?'checked':''} aria-label="Selecionar todos"> Selecionar todos${q?' (da busca)':''}</label><span class="muted small">${sel.size?sel.size+' selecionado(s)':''}</span><span class="sp"></span>${sel.size?`<button class="btn sm" id="rnone">Limpar seleção</button><button class="btn sm dark" id="rdel">${ic('trash')} Apagar selecionados (${sel.size})</button>`:''}</div>
  <div class="card scroll">${L.length?`<table class="stack"><thead><tr><th style="width:36px"></th>${cfg.cols.map(c=>`<th>${c}</th>`).join('')}<th></th></tr></thead><tbody>${L.map(c=>`<tr data-id="${c.id}" style="${sel.has(c.id)?'background:#FBF1E8':''}"><td><input type="checkbox" data-sel ${sel.has(c.id)?'checked':''} aria-label="Selecionar ${esc(c.name)}"></td>${cfg.row(c).map(x=>`<td>${x}</td>`).join('')}<td class="num nw"><button class="ib" data-ed aria-label="Editar">${ic('edit')}</button><button class="ib" data-rm aria-label="Excluir">${ic('trash')}</button></td></tr>`).join('')}</tbody></table>`:`<div class="empty">${q?'Nada encontrado.':'Cadastro vazio. Clique em Adicionar.'}</div>`}</div>`;
  $('#rn').onclick=()=>cfg.form(null);
+ if($('#rlk'))$('#rlk').onclick=()=>signupLinkDialog(key);
+ if($('#rpend'))$('#rpend').onclick=()=>pendingDialog(key);
  const keepScroll=()=>{const y=scrollY;registry(v,key);scrollTo(0,y)};
  $$('[data-sel]',v).forEach(c=>c.onchange=()=>{const id=c.closest('tr').dataset.id;c.checked?sel.add(id):sel.delete(id);keepScroll()});
  if($('#rall'))$('#rall').onchange=e=>{L.forEach(c=>e.target.checked?sel.add(c.id):sel.delete(c.id));keepScroll()};
@@ -219,6 +222,7 @@ async function startSession(){
  migrate();
  if(isAdmin()){try{runRecurring()}catch(e){}}
  await preloadPhotos();
+ try{await loadPending()}catch(e){}
  route();
 }
 (async()=>{

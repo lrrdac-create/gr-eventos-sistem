@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cadastro · GR Events</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#D45A20">
+<link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@800;900&family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#F7F3ED;--paper:#FFFDF9;--ink:#1C1713;--muted:#6B6258;--line2:#D6C7B0;--or:#D45A20;--ok:#2F7D4F;--bad:#B3392B}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Manrope,Arial,sans-serif}
+header{background:var(--ink);color:#fff;padding:22px 20px}
+.logo{display:flex;align-items:center;gap:12px;max-width:640px;margin:0 auto}
+.mk{width:42px;height:42px;border-radius:10px;background:var(--or);display:grid;place-items:center;font:900 18px Archivo,sans-serif}
+.logo b{font:900 17px Archivo,sans-serif;letter-spacing:.04em;display:block}
+.logo small{color:#CFC4B4;font-size:11px;letter-spacing:.16em}
+main{max-width:640px;margin:0 auto;padding:22px 16px 60px}
+h1{font:900 clamp(24px,5vw,30px)/1.15 Archivo,sans-serif;margin:0 0 6px}
+.muted{color:var(--muted)}.small{font-size:13px}
+form{display:grid;gap:14px;background:var(--paper);border-radius:14px;padding:20px;margin-top:18px}
+.g2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:14px}
+label.f{display:grid;gap:5px;font-weight:700;font-size:14px}
+label.f span em{color:var(--or);font-style:normal}
+input,select,textarea{font:inherit;font-size:16px;background:#fff;border:1px solid var(--line2);border-radius:10px;padding:10px 12px;width:100%;min-height:46px;color:inherit}
+textarea{min-height:90px;resize:vertical}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--or);outline-offset:1px;border-color:var(--or)}
+.ph{display:flex;align-items:center;gap:14px}
+.ph .pv{width:76px;height:76px;border-radius:50%;background:#EFE6D8;flex:none;object-fit:cover;display:grid;place-items:center;color:var(--muted);font-size:12px;text-align:center}
+.ck{display:flex;gap:10px;align-items:flex-start;font-size:14px}
+.ck input{width:20px;min-height:20px;height:20px;margin-top:2px;flex:none}
+button{min-height:50px;border:0;border-radius:10px;background:var(--or);color:#fff;font:800 16px Manrope,sans-serif;cursor:pointer}
+button:disabled{opacity:.6;cursor:wait}
+.msg{border-radius:14px;padding:22px;background:var(--paper);margin-top:18px}
+.err{color:var(--bad);min-height:1.4em;margin:0;font-size:14px}
+.hide{display:none}
+</style>
+</head>
+<body>
+<header><div class="logo"><div class="mk">GR</div><div><b>GR EVENTS</b><small>FEITO PARA ACONTECER</small></div></div></header>
+<main id="m"><p class="muted">Carregando…</p></main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.2/dist/umd/supabase.js"></script>
+<script>
+(function(){
+const SB_URL='https://fbuaaxgabbdfyrtjqurw.supabase.co';
+const SB_KEY='sb_publishable_IOAYXQv6jDmBOF5xKemg6g_-fiV4aIn';
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const m=$('#m');
+const fail=t=>{m.innerHTML=`<div class="msg"><h1>Link indisponível</h1><p class="muted">${esc(t)}</p></div>`};
+const token=new URLSearchParams(location.search).get('t')||'';
+if(!/^[0-9a-f-]{36}$/i.test(token)){fail('Este link de cadastro está incompleto. Peça um novo link para a GR Events.');return}
+if(!window.supabase){fail('Não foi possível carregar a página. Verifique a internet e tente de novo.');return}
+const sb=window.supabase.createClient(SB_URL,SB_KEY,{auth:{persistSession:false,autoRefreshToken:false}});
+
+const f=(label,name,o={})=>`<label class="f"><span>${label}${o.req?' <em>*</em>':''}</span><input name="${name}" type="${o.type||'text'}" ${o.req?'required':''} ${o.ph?`placeholder="${esc(o.ph)}"`:''} ${o.extra||''} maxlength="200"></label>`;
+const FORMS={
+ team:{t:'Cadastro de equipe',sub:'Preencha seus dados para entrar na equipe de eventos da GR Events.',html:`
+  <div class="ph"><img class="pv hide" id="pv" alt=""><span class="pv" id="pv0">Sem foto</span><label class="f" style="flex:1"><span>Sua foto (rosto bem visível)</span><input type="file" id="foto" accept="image/*"></label></div>
+  ${f('Nome completo','name',{req:1})}
+  <div class="g2">${f('Função / o que você faz','role',{req:1,ph:'Ex.: produtor, recepcionista, montador'})}${f('Telefone / WhatsApp','phone',{req:1,type:'tel',ph:'(21) 99999-9999'})}</div>
+  <div class="g2">${f('CPF','doc',{req:1,extra:'inputmode="numeric"'})}${f('RG','rg')}</div>
+  ${f('E-mail','email',{type:'email'})}
+  <div class="g2">${f('Chave PIX','pix',{req:1})}${f('Banco, agência e conta','bank')}</div>
+  <div class="g2">${f('Cidade','city')}${f('UF','state',{extra:'maxlength="2"'})}</div>`},
+ suppliers:{t:'Cadastro de fornecedor',sub:'Preencha os dados da sua empresa para entrar na base de fornecedores da GR Events.',html:`
+  ${f('Nome da empresa','name',{req:1})}
+  <div class="g2">${f('Serviço / categoria','category',{req:1,ph:'Ex.: som, iluminação, buffet'})}<label class="f"><span>Operação</span><select name="operation"><option value="">Escolha</option><option>ALUGUEL</option><option>VENDA</option><option>SERVIÇO</option></select></label></div>
+  <div class="g2">${f('Pessoa de contato','contact',{req:1})}${f('Telefone / WhatsApp','phone',{req:1,type:'tel',ph:'(21) 99999-9999'})}</div>
+  <div class="g2">${f('CNPJ ou CPF','doc',{req:1,extra:'inputmode="numeric"'})}${f('E-mail','email',{type:'email'})}</div>
+  <div class="g2">${f('Chave PIX','pix')}${f('Banco, agência e conta','bank')}</div>
+  <div class="g2">${f('Cidade','city')}${f('UF','state',{extra:'maxlength="2"'})}</div>
+  ${f('Faixa de preço','price',{ph:'Ex.: a partir de R$ 1.500 por diária'})}`}
+};
+
+/* reduz a foto para caber no envio (até 512 px, JPEG) */
+function shrink(file){return new Promise(res=>{const img=new Image();img.onload=()=>{const s=Math.min(1,512/Math.max(img.width,img.height));const c=document.createElement('canvas');c.width=Math.round(img.width*s);c.height=Math.round(img.height*s);c.getContext('2d').drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(img.src);res(c.toDataURL('image/jpeg',.82))};img.onerror=()=>res(null);img.src=URL.createObjectURL(file)})}
+
+(async()=>{
+ const r=await sb.rpc('signup_link_kind',{p_token:token});
+ if(r.error){fail('Não foi possível abrir o cadastro agora. Tente de novo em alguns minutos.');return}
+ const F=FORMS[r.data];
+ if(!F){fail('Este link foi desativado. Peça um novo link para a GR Events.');return}
+ document.title=F.t+' · GR Events';
+ m.innerHTML=`<h1>${F.t}</h1><p class="muted">${F.sub} Depois de enviar, a GR Events confere e confirma o seu cadastro.</p>
+ <form id="fm" novalidate>${F.html}
+  <label class="f"><span>Observações</span><textarea name="notes" maxlength="1500" placeholder="Experiência, disponibilidade, o que achar importante"></textarea></label>
+  <label class="ck"><input type="checkbox" id="lgpd" required><span>Autorizo a GR Events a guardar estes dados para me contatar e contratar em eventos.</span></label>
+  <p class="err" id="er"></p>
+  <button id="bt">Enviar cadastro</button>
+  <p class="muted small" style="margin:0">Campos com <em style="color:var(--or);font-style:normal">*</em> são obrigatórios.</p>
+ </form>`;
+ let photo=null;
+ const fi=$('#foto');
+ if(fi)fi.onchange=async()=>{photo=fi.files[0]?await shrink(fi.files[0]):null;$('#pv').src=photo||'';$('#pv').classList.toggle('hide',!photo);$('#pv0').classList.toggle('hide',!!photo)};
+ $('#fm').onsubmit=async e=>{
+  e.preventDefault();const fm=e.target,er=$('#er'),bt=$('#bt');er.textContent='';
+  const bad=[...fm.querySelectorAll('[required]')].find(x=>x.type==='checkbox'?!x.checked:!x.value.trim());
+  if(bad){er.textContent=bad.type==='checkbox'?'Marque a autorização para enviar.':'Preencha: '+bad.closest('label').querySelector('span').textContent.replace('*','').trim()+'.';bad.focus();return}
+  const em=fm.querySelector('[name=email]');if(em&&em.value&&!em.checkValidity()){er.textContent='Confira o e-mail.';em.focus();return}
+  const data={};fm.querySelectorAll('input[name],select[name],textarea[name]').forEach(x=>data[x.name]=x.value.trim());
+  if(data.state)data.state=data.state.toUpperCase();
+  bt.disabled=true;bt.textContent='Enviando…';
+  const s=await sb.rpc('submit_signup',{p_token:token,p_data:data,p_photo:photo});
+  if(s.error){er.textContent=s.error.message||'Não foi possível enviar. Tente de novo.';bt.disabled=false;bt.textContent='Enviar cadastro';return}
+  m.innerHTML=`<div class="msg"><h1>Cadastro enviado</h1><p>Obrigado, ${esc((data.name||'').split(' ')[0])}! A GR Events vai conferir os seus dados e confirmar o cadastro.</p><p class="muted small">Pode fechar esta página.</p></div>`;
+  scrollTo(0,0);
+ };
+})();
+})();
+</script>
+</body>
+</html>
