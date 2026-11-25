@@ -57,12 +57,15 @@ if(!window.supabase){fail('Não foi possível carregar a página. Verifique a in
 const sb=window.supabase.createClient(SB_URL,SB_KEY,{auth:{persistSession:false,autoRefreshToken:false}});
 
 const f=(label,name,o={})=>`<label class="f"><span>${label}${o.req?' <em>*</em>':''}</span><input name="${name}" type="${o.type||'text'}" ${o.req?'required':''} ${o.ph?`placeholder="${esc(o.ph)}"`:''} ${o.extra||''} maxlength="200"></label>`;
+const SHIRT=['PP','P','M','G','GG','XG','XGG'],PANTS=['34','36','38','40','42','44','46','48','50','52','54','56','PP','P','M','G','GG','XG'];
+const s=(label,name,opts)=>`<label class="f"><span>${label} <em>*</em></span><select name="${name}" required><option value="">Escolha</option>${opts.map(o=>`<option>${o}</option>`).join('')}</select></label>`;
 const FORMS={
  team:{t:'Cadastro de equipe',sub:'Preencha seus dados para entrar na equipe de eventos da GR Events.',html:`
   <div class="ph"><img class="pv hide" id="pv" alt=""><span class="pv" id="pv0">Sem foto</span><label class="f" style="flex:1"><span>Sua foto (rosto bem visível)</span><input type="file" id="foto" accept="image/*"></label></div>
   ${f('Nome completo','name',{req:1})}
   <div class="g2">${f('Função / o que você faz','role',{req:1,ph:'Ex.: produtor, recepcionista, montador'})}${f('Telefone / WhatsApp','phone',{req:1,type:'tel',ph:'(21) 99999-9999'})}</div>
   <div class="g2">${f('CPF','doc',{req:1,extra:'inputmode="numeric"'})}${f('RG','rg')}</div>
+  <div class="g2">${s('Tamanho da camisa','shirt',SHIRT)}${s('Tamanho da calça','pants',PANTS)}</div>
   ${f('E-mail','email',{type:'email'})}
   <div class="g2">${f('Chave PIX','pix',{req:1})}${f('Banco, agência e conta','bank')}</div>
   <div class="g2">${f('Cidade','city')}${f('UF','state',{extra:'maxlength="2"'})}</div>`},

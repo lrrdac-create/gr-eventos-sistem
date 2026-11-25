@@ -122,7 +122,7 @@ async function eventZip(ev){
  const z=new JSZip(),root=z.folder(ev.name.replace(/[\\/:*?"<>|]/g,'-'));
  const P=id=>S.team.find(t=>t.id===id)||{},F=id=>S.suppliers.find(t=>t.id===id)||{};
  root.folder('01 Informações').file('informacoes.txt',[`Evento: ${ev.name}`,`Status: ${ev.status}`,`Cliente: ${ev.client}`,`Contato: ${ev.contact} ${ev.phone} ${ev.email}`,`Local: ${ev.local} ${ev.address}`,`Início: ${fdate(ev.start)} ${ev.startTime}`,`Término: ${fdate(ev.end)} ${ev.endTime}`,`Participantes: ${ev.guests}`,'',`Observações: ${ev.notes}`].join('\r\n'));
- root.folder('02 Equipe').file('equipe.csv',csv([['Nome','Função no evento','Telefone','PIX'],...ev.team.map(t=>[P(t.personId).name,t.fn,P(t.personId).phone,P(t.personId).pix])]));
+ root.folder('02 Equipe').file('equipe.csv',csv([['Nome','Função no evento','Telefone','PIX','Camisa','Calça'],...ev.team.map(t=>[P(t.personId).name,t.fn,P(t.personId).phone,P(t.personId).pix,P(t.personId).shirt,P(t.personId).pants])]));
  root.folder('03 Fornecedores').file('fornecedores.csv',csv([['Fornecedor','Serviço','Telefone','E-mail'],...ev.suppliers.map(t=>[F(t.supplierId).name,t.service,F(t.supplierId).phone,F(t.supplierId).email])]));
  root.folder('04 Checklist').file('checklist.txt',ev.checklist.map(i=>`[${i.done?'x':' '}] ${i.text}`).join('\r\n'));
  root.folder('05 Cronograma').file('cronograma.csv',csv([['Data','Hora','Atividade'],...ev.schedule.map(s=>[fdate(s.date),s.time,s.activity])]));
@@ -173,6 +173,9 @@ TAB.info=(t,ev)=>{
 };
 
 /* --- Equipe e Fornecedores --- */
+const SHIRT_SZ=['PP','P','M','G','GG','XG','XGG'],PANTS_SZ=['34','36','38','40','42','44','46','48','50','52','54','56','PP','P','M','G','GG','XG'];
+const szOpts=(L,v)=>[['','—'],...L.map(x=>[x,x]),...(v&&!L.includes(v)?[[v,v]]:[])];
+const sizes=p=>[p.shirt?'Camisa '+p.shirt:'',p.pants?'Calça '+p.pants:''].filter(Boolean).join(' · ');
 function personForm(kind,p,after,opt={}){
  const isT=kind==='team',title=opt.title||(p&&p.id?'Editar ':'Novo ')+(isT?'colaborador':'fornecedor');p=p||{};
  const pv=isT&&opt.photoBlob?`<img src="${URL.createObjectURL(opt.photoBlob)}" alt="" style="width:72px;height:72px;border-radius:50%;object-fit:cover">`:avatar(p,72);
@@ -183,6 +186,7 @@ function personForm(kind,p,after,opt={}){
   <div class="grid g2">${fld('CPF / CNPJ','doc',p.doc||'')}${fld('E-mail','email',p.email||'','email')}</div>
   <div class="grid g2">${fld('Chave PIX','pix',p.pix||'')}${isT?fld('Dados bancários','bank',p.bank||''):fld('Contato','contact',p.contact||'')}</div>
   <div class="grid g2">${fld('Cidade','city',p.city||'')}${fld('UF','state',p.state||'')}</div>
+  ${isT?`<div class="grid g2">${sel('Tamanho da camisa','shirt',szOpts(SHIRT_SZ,p.shirt),p.shirt||'')}${sel('Tamanho da calça','pants',szOpts(PANTS_SZ,p.pants),p.pants||'')}</div>`:''}
   ${isT?`<div class="grid g2">${fld('RG','rg',p.rg||'')}<label class="f"><span>Pontuação</span>${stars(p.rating||0,'rating')}</label></div>`:`<div class="grid g2">${fld('Faixa de preço','price',p.price||'')}${fld('Operação','operation',p.operation||'','text','list="opl"')}</div><datalist id="opl"><option>ALUGUEL</option><option>VENDA</option><option>SERVIÇO</option></datalist>
   <div class="grid g2">${fld('Dados bancários','bank',p.bank||'')}<label class="f"><span>Avaliação</span>${stars(p.rating||0,'rating')}</label></div>`}
   ${txa('Observações','notes',p.notes||'')}
@@ -200,7 +204,7 @@ function eventPeople(t,ev,redraw,kind){
  t.innerHTML=`<div class="card grid">
   <div class="row"><label class="sp ac" style="max-width:420px"><input id="padd" placeholder="Buscar no cadastro de ${isT?'equipe':'fornecedores'} e adicionar" aria-label="Adicionar do cadastro"></label><button class="btn" id="pnew">${ic('plus')} Cadastrar novo</button></div>
   ${arr.length?`<div class="scroll"><table class="stack"><thead><tr><th>Nome</th><th>${lbl}</th><th>Telefone</th><th>${isT?'PIX':'E-mail'}</th>${isT?'':'<th>Avaliação</th>'}<th></th></tr></thead><tbody>
-  ${arr.map(a=>{const p=find(a[k])||{name:'(removido do cadastro)'};return `<tr data-id="${a.id}"><td><div class="row" style="gap:10px;flex-wrap:nowrap">${isT?avatar(p,40):''}<b>${esc(p.name)}</b></div></td><td><input data-fn="${a.id}" value="${esc(isT?a.fn:a.service)}" style="min-height:36px;padding:6px 8px" aria-label="${lbl}"></td><td class="nw">${esc(p.phone||'')}</td><td>${esc(isT?p.pix||'':p.email||'')}</td>${isT?'':`<td>${stars(p.rating||0)}</td>`}<td class="num"><button class="ib" data-pe="${a.id}" aria-label="Editar">${ic('edit')}</button><button class="ib" data-pr="${a.id}" aria-label="Remover do evento">${ic('trash')}</button></td></tr>`}).join('')}
+  ${arr.map(a=>{const p=find(a[k])||{name:'(removido do cadastro)'};return `<tr data-id="${a.id}"><td><div class="row" style="gap:10px;flex-wrap:nowrap">${isT?avatar(p,40):''}<span><b>${esc(p.name)}</b>${isT&&sizes(p)?`<br><span class="muted small">${esc(sizes(p))}</span>`:''}</span></div></td><td><input data-fn="${a.id}" value="${esc(isT?a.fn:a.service)}" style="min-height:36px;padding:6px 8px" aria-label="${lbl}"></td><td class="nw">${esc(p.phone||'')}</td><td>${esc(isT?p.pix||'':p.email||'')}</td>${isT?'':`<td>${stars(p.rating||0)}</td>`}<td class="num"><button class="ib" data-pe="${a.id}" aria-label="Editar">${ic('edit')}</button><button class="ib" data-pr="${a.id}" aria-label="Remover do evento">${ic('trash')}</button></td></tr>`}).join('')}
   </tbody></table></div>`:`<div class="empty">Ninguém adicionado ainda. Busque no cadastro ou cadastre alguém novo.</div>`}</div>`;
  const add=p=>{if(arr.some(a=>a[k]===p.id)){toast('Já está no evento.');return}arr.push({id:uid(),[k]:p.id,fn:'',service:isT?'':(p.category||'')});saveEv();redraw()};
  autocomplete($('#padd'),()=>reg.filter(p=>!arr.some(a=>a[k]===p.id)).map(p=>({label:p.name,sub:isT?p.role:p.category,obj:p,pre:isT?avatar(p,32):''})),it=>add(it.obj),{all:true});
@@ -279,7 +283,7 @@ async function resumoHTML(ev,withPhotos=true,links=false){
  let docs='';if(ev.docs.length){const urls=links?await Promise.all(ev.docs.map(d=>fileURL(d.fileId))):[];docs=`<h2>Documentos</h2><table><thead><tr><th>Arquivo</th><th class="num">Tamanho</th></tr></thead><tbody>${ev.docs.map((d,i)=>`<tr><td>${urls[i]?`<a href="${urls[i]}" target="_blank" rel="noopener" style="color:#B04716;font-weight:700">${esc(d.name)}</a>`:esc(d.name)}</td><td class="num">${d.size?(d.size/1024).toFixed(0)+' KB':''}</td></tr>`).join('')}</tbody></table>`}
  return `<h1>${esc(ev.name)}</h1><p class="muted">${esc(ev.status)} · ${fdate(ev.start)}${ev.startTime?' '+ev.startTime:''}${ev.end&&ev.end!==ev.start?' a '+fdate(ev.end):''} · ${esc(ev.local||'')} ${esc(ev.address||'')}</p>
  <h2>Cliente</h2><p><b>${esc(ev.client||'—')}</b><br>Contato: ${esc(ev.contact||'—')} · ${esc(ev.phone||'')} · ${esc(ev.email||'')}</p>
- <h2>Equipe</h2>${ev.team.length?`<table><thead><tr><th>Nome</th><th>Função</th><th>Telefone</th><th>PIX</th></tr></thead><tbody>${ev.team.map(a=>`<tr><td>${esc(P(a.personId).name||'')}</td><td>${esc(a.fn||P(a.personId).role||'')}</td><td>${esc(P(a.personId).phone||'')}</td><td>${esc(P(a.personId).pix||'')}</td></tr>`).join('')}</tbody></table>`:'<p class="muted">—</p>'}
+ <h2>Equipe</h2>${ev.team.length?`<table><thead><tr><th>Nome</th><th>Função</th><th>Telefone</th><th>PIX</th><th>Camisa</th><th>Calça</th></tr></thead><tbody>${ev.team.map(a=>`<tr><td>${esc(P(a.personId).name||'')}</td><td>${esc(a.fn||P(a.personId).role||'')}</td><td>${esc(P(a.personId).phone||'')}</td><td>${esc(P(a.personId).pix||'')}</td><td>${esc(P(a.personId).shirt||'')}</td><td>${esc(P(a.personId).pants||'')}</td></tr>`).join('')}</tbody></table>`:'<p class="muted">—</p>'}
  <h2>Fornecedores</h2>${ev.suppliers.length?`<table><thead><tr><th>Fornecedor</th><th>Serviço</th><th>Contato</th><th>Telefone</th><th>E-mail</th></tr></thead><tbody>${ev.suppliers.map(a=>`<tr><td>${esc(F(a.supplierId).name||'')}</td><td>${esc(a.service||'')}</td><td>${esc(F(a.supplierId).contact||'')}</td><td>${esc(F(a.supplierId).phone||'')}</td><td>${esc(F(a.supplierId).email||'')}</td></tr>`).join('')}</tbody></table>`:'<p class="muted">—</p>'}
  ${ev.timeline.length?`<h2>Linha do tempo do dia</h2><table><tbody>${ev.timeline.map(s=>`<tr><td style="width:80px"><b>${esc(s.time)}</b></td><td>${esc(s.text)}</td><td>${esc(s.who||'')}</td></tr>`).join('')}</tbody></table>`:''}
  ${ev.notes?`<h2>Observações</h2><p>${esc(ev.notes).replace(/\n/g,'<br>')}</p>`:''}${orgStaticHTML(ev)}${docs}${photos}`;
